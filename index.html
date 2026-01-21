@@ -168,6 +168,20 @@ let server = null;
 let service = null;
 let charWrite32 = null;
 let notifyChar = null;
+    
+let keepAlive = null;
+
+function startKeepAlive() {
+    keepAlive = setInterval(() => {
+        // send32 ignoriert ID=255
+        send32(255, 0);
+    }, 5000);
+}
+
+function stopKeepAlive() {
+    if (keepAlive) clearInterval(keepAlive);
+}
+
 
 /* ---------- Utils ---------- */
 function pad2(n){ return n.toString().padStart(2, "0"); }
@@ -210,6 +224,14 @@ function onNotify(event) {
     }
 }
 
+
+async function requestInitialValues() {
+    // Trigger: M5Dial soll alle Werte zurücksenden
+    // wir schicken eine spezielle ID=99
+    send32(99, 0);
+}
+
+    
 /* ---------- BLE: Gemeinsame Connect-Initialisierung ---------- */
 async function setupGattAndUI(gattServer) {
     server = gattServer;
@@ -225,6 +247,7 @@ async function setupGattAndUI(gattServer) {
 
     // UI schalten
     showSettingsUI(true);
+    requestInitialValues();
 }
 
 /* ---------- Disconnect ---------- */
@@ -243,9 +266,11 @@ async function connectBLE() {
 
         const gattServer = await device.gatt.connect();
         await setupGattAndUI(gattServer);
+        startKeepAlive();
     } catch (err) {
         console.error("BLE connect failed:", err);
         showSettingsUI(false);
+        stopKeepAlive();
     }
 }
 
@@ -272,15 +297,18 @@ async function tryAutoReconnect() {
         // Bereits verbunden?
         if (device.gatt && device.gatt.connected) {
             await setupGattAndUI(device.gatt);
+            startKeepAlive();
             return;
         }
 
         // Verbinden ohne erneuten Dialog (da bereits erlaubt)
         const gattServer = await device.gatt.connect();
         await setupGattAndUI(gattServer);
+        startKeepAlive();
     } catch (err) {
         console.warn("Auto-Reconnect nicht möglich:", err);
         showSettingsUI(false);
+        stopKeepAlive();
     }
 }
 
