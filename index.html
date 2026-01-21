@@ -216,10 +216,20 @@ document.getElementById("connectBtn").onclick = async () => {
             document.getElementById("sliderA").value = val;
         }
     });
+    device.addEventListener("gattserverdisconnected", onDisconnected);
 
     document.getElementById("connectBtn").style.display = "none";
     document.getElementById("settings").style.display = "block";
 };
+
+    
+function onDisconnected() {
+    console.warn("BLE getrennt");
+
+    document.getElementById("settings").style.display = "none";
+    document.getElementById("connectBtn").style.display = "block";
+    document.getElementById("connectBtn").textContent = "🔄 Erneut verbinden";
+}
 
 
 function markOK(id, ok) {
