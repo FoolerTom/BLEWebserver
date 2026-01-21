@@ -31,6 +31,8 @@
         margin-top: 30px;
     }
 
+    /* TIMER UI */
+
     .timer-block {
         margin-top: 30px;
         padding: 15px;
@@ -43,43 +45,44 @@
         justify-content: space-between;
     }
 
+    /* WICHTIG: Höhe = 3 Elemente à 40px */
     .picker {
         width: 30%;
-        height: 150px;
+        height: 120px;         
         overflow-y: scroll;
-        border-radius: 10px;
+        scrollbar-width: none;
         border: 1px solid #bbb;
+        border-radius: 10px;
         background: #fff;
         position: relative;
-        scroll-behavior: smooth;
+    }
+
+    .picker::-webkit-scrollbar {
+        display: none;
     }
 
     .picker div {
         height: 40px;
         line-height: 40px;
-        font-size: 24px;
+        font-size: 22px;
     }
 
-    .picker::-webkit-scrollbar { width: 0; }
-
-    /* Auswahlbereich in der Mitte */
+    /* FIXER Auswahlbereich */
     .picker::before {
         content: "";
         position: absolute;
-        top: 55px;
+        top: 40px;     /* Mitte Element 2 von 3 */
         left: 0;
         width: 100%;
         height: 40px;
         border-top: 2px solid #4CAF50;
         border-bottom: 2px solid #4CAF50;
         pointer-events: none;
-    }
-
-    input[type=range] {
-        width: 100%;
+        z-index: 10;
     }
 </style>
 </head>
+
 <body>
 
 <h1>M5Dial Einstellungen</h1>
@@ -91,7 +94,7 @@
     <h2>Parameter A: <span id="valueA">0</span></h2>
     <input type="range" min="0" max="255" id="sliderA">
 
-    <!-- Timer 1 -->
+    <!-- TIMER 1 -->
     <div class="timer-block">
         <h2>⏱ Timer 1</h2>
         <div class="picker-row">
@@ -101,7 +104,7 @@
         </div>
     </div>
 
-    <!-- Timer 2 -->
+    <!-- TIMER 2 -->
     <div class="timer-block">
         <h2>⏱ Timer 2</h2>
         <div class="picker-row">
@@ -114,9 +117,9 @@
 </div>
 
 <script>
-let charWrite32 = null;
+let charWrite32;
 
-/* ---------- BLE CONNECT ---------- */
+/* ---------------- BLE CONNECT ---------------- */
 
 document.getElementById("connectBtn").onclick = async () => {
     const device = await navigator.bluetooth.requestDevice({
@@ -133,7 +136,7 @@ document.getElementById("connectBtn").onclick = async () => {
     document.getElementById("settings").style.display = "block";
 };
 
-/* ---------- HELFER ---------- */
+/* ---------------- HELPER ---------------- */
 
 function send32(id, value) {
     if (!charWrite32) return;
@@ -146,71 +149,73 @@ function send32(id, value) {
     charWrite32.writeValue(b);
 }
 
-/* ---------- SLIDER SENDEN ---------- */
+/* ---------------- SLIDER ---------------- */
 
 document.getElementById("sliderA").oninput = e => {
-    let v = Number(e.target.value);
+    const v = Number(e.target.value);
     document.getElementById("valueA").innerText = v;
     send32(2, v);
 };
 
-/* ---------- TIMER PICKER ---------- */
+/* ---------------- TIMER LOGIK ---------------- */
 
-function createLoop(element, max) {
-    for (let loop=0; loop<3; loop++) {
-        for (let i=0; i<=max; i++) {
+function createWheel(el, max) {
+    // 5 Wiederholungen für stabile Endlos-Schleife
+    for (let r = 0; r < 5; r++) {
+        for (let i = 0; i <= max; i++) {
             const d = document.createElement("div");
-            d.innerText = i.toString().padStart(2,"0");
-            element.appendChild(d);
+            d.innerText = i.toString().padStart(2, "0");
+            el.appendChild(d);
         }
     }
-    const mid = (max+1) * 1;
-    element.scrollTop = mid * 40;
+    const block = max + 1;
+    const midStart = block * 2;  
+    el.scrollTop = midStart * 40;
 }
 
-function fixLoop(element, max) {
-    const block = max+1;
-    const total = block * 3;
-    let idx = Math.round(element.scrollTop / 40);
+function normalizeScroll(el, max) {
+    const block = max + 1;
+    const scrollBlock = Math.floor(el.scrollTop / (block * 40));
 
-    // Zu nah an Anfang: nach unten versetzen
-    if (idx < block*0.5)
-        element.scrollTop += block * 40;
-
-    // Zu nah am Ende: nach oben versetzen
-    if (idx > block*2.5)
-        element.scrollTop -= block * 40;
+    if (scrollBlock < 1)
+        el.scrollTop += block * 40;
+    if (scrollBlock > 3)
+        el.scrollTop -= block * 40;
 }
 
-function snap(element, max) {
-    let idx = Math.round(element.scrollTop / 40);
-    element.scrollTop = idx * 40;
+function snap(el, max) {
+    const idx = Math.round(el.scrollTop / 40);
+    el.scrollTop = idx * 40;
+}
+
+function valueFrom(el, max) {
+    const block = max + 1;
+    const idx = Math.round(el.scrollTop / 40) % block;
+    return idx;
 }
 
 function setupTimer(timerID, h, m, s) {
-    createLoop(h, 23);
-    createLoop(m, 59);
-    createLoop(s, 59);
+    createWheel(h, 23);
+    createWheel(m, 59);
+    createWheel(s, 59);
 
-    [h,m,s].forEach((el, i)=>{
-        const max = (i==0 ? 23 : 59);
+    [h,m,s].forEach((el, i) => {
+        const max = (i === 0 ? 23 : 59);
 
-        el.addEventListener("scroll", ()=>{
+        el.addEventListener("scroll", () => {
             clearTimeout(el._t);
-            el._t = setTimeout(()=>{
-
-                fixLoop(el, max);
+            el._t = setTimeout(() => {
+                normalizeScroll(el, max);
                 snap(el, max);
 
-                const hour = Math.round(h.scrollTop/40) % 24;
-                const min  = Math.round(m.scrollTop/40) % 60;
-                const sec  = Math.round(s.scrollTop/40) % 60;
+                const hh = valueFrom(h, 23);
+                const mm = valueFrom(m, 59);
+                const ss = valueFrom(s, 59);
 
-                const total = hour*3600 + min*60 + sec;
-
+                const total = hh*3600 + mm*60 + ss;
                 send32(timerID, total);
 
-            },150);
+            }, 120);
         });
     });
 }
@@ -226,7 +231,6 @@ setupTimer(1,
     document.getElementById("t2m"),
     document.getElementById("t2s")
 );
-
 </script>
 </body>
 </html>
