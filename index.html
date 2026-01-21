@@ -1,0 +1,68 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>M5Dial BLE Config</title>
+<style>
+  body {
+    font-family: sans-serif;
+    padding: 20px;
+    max-width: 400px;
+    margin: auto;
+  }
+  button {
+    padding: 10px 20px;
+    font-size: 16px;
+  }
+  input[type=range] {
+    width: 100%;
+  }
+</style>
+</head>
+<body>
+
+<h1>M5Dial Konfigurator</h1>
+
+<button id="connectBtn">🔗 Verbinden</button>
+
+<h3>Parameter A: <span id="valueA">--</span></h3>
+<input type="range" min="0" max="255" id="sliderA" value="0">
+
+<script>
+let paramWrite, paramNotify;
+
+document.getElementById("connectBtn").onclick = async () => {
+  try {
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [{ name: "M5DialConfig" }],
+      optionalServices: ["12345678-1234-5678-1234-56789abcdef0"]
+    });
+
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService("12345678-1234-5678-1234-56789abcdef0");
+
+    paramWrite = await service.getCharacteristic("11111111-1234-5678-1234-56789abcdef0");
+    paramNotify = await service.getCharacteristic("22222222-1234-5678-1234-56789abcdef0");
+
+    await paramNotify.startNotifications();
+    paramNotify.addEventListener("characteristicvaluechanged", e => {
+      const value = e.target.value.getUint8(0);
+      document.getElementById("valueA").innerText = value;
+      document.getElementById("sliderA").value = value;
+    });
+
+  } catch (e) {
+    alert("Fehler: " + e);
+  }
+};
+
+document.getElementById("sliderA").oninput = async ev => {
+  const v = Number(ev.target.value);
+  document.getElementById("valueA").innerText = v;
+  if (paramWrite) await paramWrite.writeValue(new Uint8Array([v]));
+};
+</script>
+
+</body>
+</html>
