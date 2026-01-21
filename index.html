@@ -3,243 +3,90 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>M5Dial Konfigurator</title>
+<title>Timer Minimal Test</title>
 
 <style>
-    body {
-        font-family: sans-serif;
-        padding: 20px;
-        max-width: 420px;
-        margin: auto;
-        text-align: center;
-        overscroll-behavior: none; /* verhindert Pull-To-Refresh auf der Seite */
-    }
+body {
+    font-family: sans-serif;
+    max-width: 320px;
+    margin: auto;
+    padding: 20px;
+}
 
-    #connectBtn {
-        background: linear-gradient(135deg, #4CAF50, #2E7D32);
-        border: none;
-        padding: 16px 32px;
-        border-radius: 12px;
-        color: white;
-        font-size: 20px;
-        cursor: pointer;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        margin-top: 80px;
-    }
+/* Picker-Container */
+.picker {
+    width: 100px;
+    height: 120px;        /* 3 × 40px */
+    overflow-y: scroll;
+    border: 1px solid #aaa;
+    position: relative;
+    margin: auto;
+    scrollbar-width: none;
+    overscroll-behavior: contain;
+    touch-action: none;
+}
+.picker::-webkit-scrollbar { display: none; }
 
-    #settings {
-        display: none;
-        margin-top: 30px;
-    }
+/* Einzelelement */
+.picker div {
+    height: 40px;
+    line-height: 40px;
+    font-size: 22px;
+    text-align: center;
+}
 
-
-    /* TIMER UI */
-    .timer-block {
-        margin-top: 30px;
-        padding: 15px;
-        border-radius: 12px;
-        background: #f5f5f5;
-    }
-
-    .picker-row {
-        display: flex;
-        justify-content: space-between;
-    }
-
-    .picker {
-        position: relative;
-        width: 30%;
-        height: 120px;
-        overflow-y: scroll;
-        border-radius: 10px;
-        background: #fff;
-        border: 1px solid #bbb;
-        touch-action: none; /* Verhindert Browser-Pull-Refresh */
-        overscroll-behavior: contain; /* Kein Bounce-Effekt */
-        scroll-behavior: smooth;
-    }
-
-    .picker::-webkit-scrollbar { display:none; }
-
-    .picker div {
-        height: 40px;
-        line-height: 40px;
-        font-size: 22px;
-        text-align: center;
-    }
-
-    /* Fester Auswahlbereich */
-    .picker::after {
-        content: "";
-        position: absolute;
-        top: 40px; /* Mitte: 3. von 3 Zeilen = 40px */
-        left: 0;
-        width: 100%;
-        height: 40px;
-        border-top: 2px solid #4CAF50;
-        border-bottom: 2px solid #4CAF50;
-        pointer-events: none;
-        z-index: 50;
-    }
+/* Fester Auswahlbereich */
+.picker::after {
+    content: "";
+    position: absolute;
+    top: 40px;   /* zweite Zeile */
+    left: 0;
+    width: 100%;
+    height: 40px;
+    border-top: 2px solid green;
+    border-bottom: 2px solid green;
+    pointer-events: none;
+    z-index: 10;
+}
 </style>
 </head>
 
 <body>
 
-<h1>M5Dial Einstellungen2</h1>
-
-<button id="connectBtn">🔗 Gerät verbinden</button>
-
-<div id="settings">
-
-    <h2>Parameter A: <span id="valueA">0</span></h2>
-    <input type="range" min="0" max="255" id="sliderA">
-
-    <!-- TIMER 1 -->
-    <div class="timer-block">
-        <h2>⏱ Timer 1</h2>
-        <div class="picker-row">
-            <div class="picker" id="t1h"></div>
-            <div class="picker" id="t1m"></div>
-            <div class="picker" id="t1s"></div>
-        </div>
-    </div>
-
-    <!-- TIMER 2 -->
-    <div class="timer-block">
-        <h2>⏱ Timer 2</h2>
-        <div class="picker-row">
-            <div class="picker" id="t2h"></div>
-            <div class="picker" id="t2m"></div>
-            <div class="picker" id="t2s"></div>
-        </div>
-    </div>
-
+<h2>Timer-Test</h2>
+<div class="picker" id="test">
 </div>
 
 <script>
-let charWrite32 = null;
 const ITEM_HEIGHT = 40;
+const picker = document.getElementById("test");
 
-/* ---------------- BLE CONNECT ---------------- */
-
-document.getElementById("connectBtn").onclick = async () => {
-    const device = await navigator.bluetooth.requestDevice({
-        filters: [{ name: "M5DialConfig" }],
-        optionalServices: ["12345678-1234-5678-1234-56789abcdef0"]
-    });
-
-    const server = await device.gatt.connect();
-    const service = await server.getPrimaryService("12345678-1234-5678-1234-56789abcdef0");
-
-    charWrite32 = await service.getCharacteristic("11111111-1234-5678-1234-56789abcdef0");
-
-    document.getElementById("connectBtn").style.display = "none";
-    document.getElementById("settings").style.display = "block";
-};
-
-/* ---------------- HELPER ---------------- */
-
-function send32(id, value) {
-    if (!charWrite32) return;
-    let b = new Uint8Array(5);
-    b[0] = id;
-    b[1] = value & 0xFF;
-    b[2] = (value >> 8) & 0xFF;
-    b[3] = (value >> 16) & 0xFF;
-    b[4] = (value >> 24) & 0xFF;
-    charWrite32.writeValue(b);
+/* --- Inhalt: NUR einmal 0..59 --- */
+for (let i = 0; i <= 59; i++) {
+    const d = document.createElement("div");
+    d.innerText = i.toString().padStart(2,"0");
+    picker.appendChild(d);
 }
 
-/* ---------------- SLIDER ---------------- */
+/* --- Startposition: mit Wert 30 in der Mitte --- */
+picker.scrollTop = 30 * ITEM_HEIGHT;
 
-document.getElementById("sliderA").oninput = e => {
-    const v = Number(e.target.value);
-    document.getElementById("valueA").innerText = v;
-    send32(2, v);
-};
+/* --- Snap-to-center nach Scrollen --- */
+picker.addEventListener("scroll", ()=>{
+    clearTimeout(picker._t);
+    picker._t = setTimeout(()=>{
 
-/* ---------------- TIMER LOGIK ---------------- */
+        // Index bestimmen
+        let idx = Math.round(picker.scrollTop / ITEM_HEIGHT);
 
-function createWheel(el, max) {
-    const repeats = 7;    // stabil für Endlosrad
-    for (let r = 0; r < repeats; r++) {
-        for (let i = 0; i <= max; i++) {
-            const d = document.createElement("div");
-            d.innerText = i.toString().padStart(2,"0");
-            el.appendChild(d);
-        }
-    }
+        // Snap
+        picker.scrollTop = idx * ITEM_HEIGHT;
 
-    const block = max + 1;
-    const midBlockStart = block * Math.floor(repeats / 2);  // Block 3 von 7
-    el.scrollTop = midBlockStart * ITEM_HEIGHT;
-}
+        console.log("Ausgewählt:", idx);
 
-function keepCentered(el, max) {
-    const block = max + 1;
-    const blockSize = block * ITEM_HEIGHT;
-    const totalSize = blockSize * 7;
-
-    const centerBlock = 3; // Block 3 von 0...6
-
-    const currentBlock = Math.floor(el.scrollTop / blockSize);
-
-    if (currentBlock < centerBlock - 1) {
-        el.scrollTop += blockSize;
-    } else if (currentBlock > centerBlock + 1) {
-        el.scrollTop -= blockSize;
-    }
-}
-
-function snapToCenter(el) {
-    let idx = Math.round(el.scrollTop / ITEM_HEIGHT);
-    el.scrollTop = idx * ITEM_HEIGHT;
-}
-
-function getValue(el, max) {
-    const block = max + 1;
-    const idx = Math.round(el.scrollTop / ITEM_HEIGHT) % block;
-    return idx;
-}
-
-function setupTimer(timerID, h, m, s) {
-    createWheel(h, 23);
-    createWheel(m, 59);
-    createWheel(s, 59);
-
-    [h,m,s].forEach((el, i) => {
-        const max = (i === 0 ? 23 : 59);
-
-        el.addEventListener("scroll", () => {
-            clearTimeout(el._t);
-            el._t = setTimeout(() => {
-
-                keepCentered(el, max);
-                snapToCenter(el);
-
-                const hh = getValue(h, 23);
-                const mm = getValue(m, 59);
-                const ss = getValue(s, 59);
-
-                send32(timerID, hh*3600 + mm*60 + ss);
-
-            }, 120);
-        });
-    });
-}
-
-setupTimer(0, 
-    document.getElementById("t1h"),
-    document.getElementById("t1m"),
-    document.getElementById("t1s")
-);
-
-setupTimer(1,
-    document.getElementById("t2h"),
-    document.getElementById("t2m"),
-    document.getElementById("t2s")
-);
+    },120);
+});
 </script>
+
 </body>
 </html>
