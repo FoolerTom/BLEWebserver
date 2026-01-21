@@ -32,25 +32,19 @@
         box-shadow: 0 6px 16px rgba(0,0,0,0.3);
     }
 
-    /* Inhalt nach Verbindung */
+    /* Nach Verbindung sichtbarer Bereich */
     #settings {
         display: none;
-        margin-top: 40px;
-        text-align: left;
+        margin-top: 30px;
+        text-align: center;
     }
 
-    /* Timer Container */
+    /* Timer Block */
     .timer-block {
         margin-top: 30px;
         padding: 15px;
         border-radius: 12px;
         background: #f5f5f5;
-    }
-
-    .timer-title {
-        font-size: 20px;
-        font-weight: bold;
-        margin-bottom: 10px;
     }
 
     .picker-row {
@@ -60,23 +54,37 @@
 
     .picker {
         width: 30%;
-        height: 120px;
+        height: 150px;
         overflow-y: scroll;
         border-radius: 10px;
         border: 1px solid #bbb;
         background: #fff;
-        scrollbar-width: thin;
+        position: relative;
+        scroll-behavior: smooth;
+    }
+
+    .picker::-webkit-scrollbar {
+        width: 6px;
     }
 
     .picker div {
         padding: 10px;
         font-size: 20px;
+        height: 40px;
+        line-height: 40px;
     }
 
-    .picker div.selected {
-        background: #4CAF50;
-        color: white;
-        border-radius: 6px;
+    /* feste Auswahlzone */
+    .picker::before {
+        content: "";
+        position: absolute;
+        top: 55px;
+        left: 0;
+        width: 100%;
+        height: 40px;
+        border-top: 2px solid #4CAF50;
+        border-bottom: 2px solid #4CAF50;
+        pointer-events: none;
     }
 </style>
 </head>
@@ -84,18 +92,13 @@
 
 <h1>M5Dial Einstellungen</h1>
 
-<!-- Nur am Anfang sichtbar -->
 <button id="connectBtn">🔗 Gerät verbinden</button>
 
-<!-- Inhalt nach BLE-Verbindung -->
 <div id="settings">
-
-    <h2>Parameter A: <span id="valueA">--</span></h2>
-    <input type="range" min="0" max="255" id="sliderA">
 
     <!-- Timer 1 -->
     <div class="timer-block">
-        <div class="timer-title">⏱ Timer 1</div>
+        <h2>⏱ Timer 1</h2>
         <div class="picker-row">
             <div class="picker" id="t1h"></div>
             <div class="picker" id="t1m"></div>
@@ -105,7 +108,7 @@
 
     <!-- Timer 2 -->
     <div class="timer-block">
-        <div class="timer-title">⏱ Timer 2</div>
+        <h2>⏱ Timer 2</h2>
         <div class="picker-row">
             <div class="picker" id="t2h"></div>
             <div class="picker" id="t2m"></div>
@@ -116,9 +119,10 @@
 </div>
 
 <script>
-let paramWrite, paramNotify;
+let charWrite32;
 
-// BLE Verbinden
+/* -------------------- BLE VERBINDUNG -------------------- */
+
 document.getElementById("connectBtn").onclick = async () => {
     try {
         const device = await navigator.bluetooth.requestDevice({
@@ -129,79 +133,102 @@ document.getElementById("connectBtn").onclick = async () => {
         const server = await device.gatt.connect();
         const service = await server.getPrimaryService("12345678-1234-5678-1234-56789abcdef0");
 
-        paramWrite = await service.getCharacteristic("11111111-1234-5678-1234-56789abcdef0");
-        paramNotify = await service.getCharacteristic("22222222-1234-5678-1234-56789abcdef0");
-
-        await paramNotify.startNotifications();
-        paramNotify.addEventListener("characteristicvaluechanged", e => {
-            const value = e.target.value.getUint8(0);
-            document.getElementById("valueA").innerText = value;
-            document.getElementById("sliderA").value = value;
-        });
+        // Neue Characteristic für 32bit Werte
+        charWrite32 = await service.getCharacteristic("11111111-1234-5678-1234-56789abcdef0");
 
         document.getElementById("connectBtn").style.display = "none";
         document.getElementById("settings").style.display = "block";
 
-    } catch (e) {
+    } catch(e) {
         alert("Fehler: " + e);
     }
 };
 
-// Slider → M5Dial
-document.getElementById("sliderA").oninput = async ev => {
-    const v = Number(ev.target.value);
-    document.getElementById("valueA").innerText = v;
-    if (paramWrite) await paramWrite.writeValue(new Uint8Array([v]));
-};
 
-//
-// ---------- TIMER PICKER LOGIK ----------
-//
-function buildPicker(element, max) {
-    for (let i = 0; i <= max; i++) {
-        const d = document.createElement("div");
-        d.innerText = i.toString().padStart(2, "0");
-        element.appendChild(d);
+/* -------------------- TIMER PICKER -------------------- */
+
+function buildPickerLoop(element, max) {
+    // 3 Loops: 0..max
+    for (let loop = 0; loop < 3; loop++) {
+        for (let i = 0; i <= max; i++) {
+            const d = document.createElement("div");
+            d.innerText = i.toString().padStart(2, "0");
+            element.appendChild(d);
+        }
     }
+
+    // Mitte als Startposition
+    const middle = (max+1) * 1; 
+    element.scrollTop = middle * 40;
 }
 
-// Picker initialisieren
-["t1h","t2h"].forEach(id => buildPicker(document.getElementById(id), 23));
-["t1m","t2m","t1s","t2s"].forEach(id => buildPicker(document.getElementById(id), 59));
+function snapToCenter(element, max) {
+    let index = Math.round(element.scrollTop / 40);
+    element.scrollTop = index * 40;
 
-// Scroll-Auswahl markieren + Sekunden senden
-function setupPicker(timerName, element, unit) {
-    element.addEventListener("scroll", () => {
-        const index = Math.round(element.scrollTop / 40);
-        [...element.children].forEach((c,i) => c.classList.toggle("selected", i === index));
+    // Looping Bereich korrigieren
+    const total = (max+1) * 3;
 
-        updateTimerSeconds(timerName);
+    if (index < (max+1)*0.5) element.scrollTop += (max+1)*40;
+    if (index > (max+1)*2.5) element.scrollTop -= (max+1)*40;
+}
+
+async function send32(valueIndex, seconds) {
+    if (!charWrite32) return;
+
+    // 32 bit little-endian Buffer
+    let b = new Uint8Array(5);
+    b[0] = valueIndex;          // Kennung 0=timer1, 1=timer2, 2=valueA
+    b[1] = seconds & 0xFF;
+    b[2] = (seconds >> 8) & 0xFF;
+    b[3] = (seconds >> 16) & 0xFF;
+    b[4] = (seconds >> 24) & 0xFF;
+
+    await charWrite32.writeValue(b);
+}
+
+function setupTimer(timerIdx, h, m, s) {
+    const maxH = 23;
+    const maxMS = 59;
+
+    [h,m,s].forEach((el, i)=>{
+        const max = (i === 0 ? maxH : maxMS);
+
+        buildPickerLoop(el, max);
+
+        el.addEventListener("scroll", ()=>{
+            clearTimeout(el._timeout);
+            el._timeout = setTimeout(()=> {
+                snapToCenter(el, max);
+
+                // Werte extrahieren
+                const hour   = Math.round(h.scrollTop / 40) % (maxH+1);
+                const minute = Math.round(m.scrollTop / 40) % 60;
+                const second = Math.round(s.scrollTop / 40) % 60;
+
+                const total = hour*3600 + minute*60 + second;
+
+                send32(timerIdx, total);
+
+            }, 150);
+        });
     });
 }
 
-// Timer Sekunden berechnen + BLE senden
-async function updateTimerSeconds(timer) {
-    const h = parseInt(document.querySelector(`#${timer}h .selected`)?.innerText || "0");
-    const m = parseInt(document.querySelector(`#${timer}m .selected`)?.innerText || "0");
-    const s = parseInt(document.querySelector(`#${timer}s .selected`)?.innerText || "0");
+/* Timer 1 */
+setupTimer(0,
+    document.getElementById("t1h"),
+    document.getElementById("t1m"),
+    document.getElementById("t1s")
+);
 
-    const total = h*3600 + m*60 + s;
+/* Timer 2 */
+setupTimer(1,
+    document.getElementById("t2h"),
+    document.getElementById("t2m"),
+    document.getElementById("t2s")
+);
 
-    console.log(timer + " → " + total + " Sekunden");
-
-    if (paramWrite) {
-        await paramWrite.writeValue(new Uint8Array([total & 0xFF]));
-    }
-}
-
-// Picker verbinden
-setupPicker("t1", document.getElementById("t1h"));
-setupPicker("t1", document.getElementById("t1m"));
-setupPicker("t1", document.getElementById("t1s"));
-
-setupPicker("t2", document.getElementById("t2h"));
-setupPicker("t2", document.getElementById("t2m"));
-setupPicker("t2", document.getElementById("t2s"));
 </script>
 
 </body>
