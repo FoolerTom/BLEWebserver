@@ -97,7 +97,7 @@ body {
 
 <body>
 
-<h1>Nachtlicht Konfigurator</h1>
+<h1>Nachtlicht Konfigurator123</h1>
 
 <button id="connectBtn">🔗 Gerät verbinden</button>
 
@@ -165,9 +165,13 @@ async function connectBLE() {
         const id = v.getUint8(0);
         const val = v.getUint32(1, true);
 
-        if (val != lastSent[id]) {
-            send32(id, value);
+        
+        if (lastSent[id] === val) {
+            markOK(id, true);
+        } else {
+            markOK(id, false);
         }
+
     });
 }
 
@@ -199,9 +203,12 @@ document.getElementById("connectBtn").onclick = async () => {
         console.log("RX from M5Dial:", {id, val});
 
         // Compare to last sent:
-        if (val != lastSent[id]) {
-            send32(id, value);
+        if (lastSent[id] === val) {
+            markOK(id, true);
+        } else {
+            markOK(id, false);
         }
+
 
         // Optional: the UI can also adopt the confirmed value:
         if (id === 2) {
@@ -215,6 +222,25 @@ document.getElementById("connectBtn").onclick = async () => {
 };
 
 
+function markOK(id, ok) {
+    let el = null;
+    if (id === 0) el = document.getElementById("timer1Status");
+    if (id === 1) el = document.getElementById("timer2Status");
+    if (id === 2) el = document.getElementById("valueA");
+
+    if (!el) return;
+
+    if (ok) {
+        el.classList.add("statusOK");
+        el.classList.remove("statusBAD");
+    } else {
+        el.classList.add("statusBAD");
+        el.classList.remove("statusOK");
+    }
+}
+
+
+    
 /* ---------- BLE SENDER ---------- */
 function send32(id, value) {
     if (!charWrite32) return;
