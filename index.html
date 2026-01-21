@@ -82,6 +82,9 @@ body {
     margin-top: 10px;
 }
 
+.statusOK { color: green; }
+.statusBAD { color: red; }
+
 /* Timer Block */
 .timer-block {
     background: #f0f0f0;
@@ -101,7 +104,7 @@ body {
 <div id="settings">
 
     <!-- SLIDER -->
-    <h2>Helligkeit: <span id="valueA">0</span></h2>
+    <h2>Helligkeit: <span id="valueA" class="statusVal">0</span></h2>
     <input type="range" min="0" max="255" id="sliderA" style="width:90%;">
 
     <!-- TIMER 1 -->
@@ -170,19 +173,30 @@ async function connectBLE() {
     });
 }
 
+
 function markOK(id, ok) {
     let el = null;
-    if (id === 0) el = document.querySelector("#timer1Status");
-    if (id === 1) el = document.querySelector("#timer2Status");
-    if (id === 2) el = document.querySelector("#sliderA");
+    if (id === 0) el = document.getElementById("timer1Status");
+    if (id === 1) el = document.getElementById("timer2Status");
+    if (id === 2) el = document.getElementById("valueA");
+
     if (!el) return;
 
-    el.style.color = ok ? "green" : "red";
+    if (ok) {
+        el.classList.add("statusOK");
+        el.classList.remove("statusBAD");
+    } else {
+        el.classList.add("statusBAD");
+        el.classList.remove("statusOK");
+    }
 }
+
 
     
 /* ---------- BLE verbindung ---------- */
+
 document.getElementById("connectBtn").onclick = async () => {
+
     const device = await navigator.bluetooth.requestDevice({
         filters: [{ name: "M5DialConfig" }],
         optionalServices: ["12345678-1234-5678-1234-56789abcdef0"]
@@ -193,9 +207,36 @@ document.getElementById("connectBtn").onclick = async () => {
 
     charWrite32 = await service.getCharacteristic("11111111-1234-5678-1234-56789abcdef0");
 
+    // NEW → notify characteristic
+    notifyChar = await service.getCharacteristic("22222222-1234-5678-1234-56789abcdef0");
+
+    await notifyChar.startNotifications();
+
+    notifyChar.addEventListener("characteristicvaluechanged", event => {
+        const data = event.target.value;
+        const id   = data.getUint8(0);
+        const val  = data.getUint32(1, true);
+
+        console.log("RX from M5Dial:", {id, val});
+
+        // Compare to last sent:
+        if (lastSent[id] === val) {
+            markOK(id, true);
+        } else {
+            markOK(id, false);
+        }
+
+        // Optional: the UI can also adopt the confirmed value:
+        if (id === 2) {
+            document.getElementById("valueA").innerText = val;
+            document.getElementById("sliderA").value = val;
+        }
+    });
+
     document.getElementById("connectBtn").style.display = "none";
     document.getElementById("settings").style.display = "block";
 };
+
 
 /* ---------- BLE SENDER ---------- */
 function send32(id, value) {
