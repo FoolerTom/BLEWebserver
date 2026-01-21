@@ -3,65 +3,107 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Scroll-Test</title>
+<title>Timer Basisversion</title>
 
 <style>
 body {
     font-family: sans-serif;
-    padding: 20px;
-    max-width: 300px;
+    max-width: 320px;
     margin: auto;
+    padding: 20px;
+    overscroll-behavior: none;
 }
 
+/* Picker zeigt 3 Werte */
 .picker {
     width: 120px;
-    height: 200px;              /* Größer für sichereres Scrollen */
+    height: 120px; /* 3 x 40px */
     overflow-y: scroll;
     border: 1px solid black;
-    margin: auto;
     position: relative;
-
-    /* WICHTIG: Scroll erlauben */
+    margin: auto;
+    scrollbar-width: none;
     touch-action: auto !important;
-    overscroll-behavior: auto !important;
+    overscroll-behavior: contain !important;
 }
+.picker::-webkit-scrollbar { display:none; }
 
+/* Einzelelement */
 .picker div {
     height: 40px;
     line-height: 40px;
-    font-size: 20px;
+    font-size: 24px;
     text-align: center;
-    border-bottom: 1px solid #ccc;
 }
 
-/* Fester Balken */
+/* Fester Auswahlbalken */
 .picker::after {
     content: "";
     position: absolute;
-    top: 80px;     /* irgendwo sichtbar */
+    top: 40px;  /* mittlere der 3 Zeilen */
     left: 0;
     width: 100%;
     height: 40px;
-    border: 2px solid green;
+    border-top: 2px solid green;
+    border-bottom: 2px solid green;
     pointer-events: none;
-    z-index: 10;
+    z-index: 5;
 }
 </style>
 </head>
 
 <body>
 
-<h2>TEST</h2>
-
+<h2>3‑Werte Timer Test</h2>
 <div class="picker" id="pick"></div>
+<p>Ausgewählter Wert: <span id="out">--</span></p>
 
 <script>
-const p = document.getElementById("pick");
-for (let i=0;i<60;i++){
-    const d=document.createElement("div");
-    d.innerText=i.toString().padStart(2,"0");
-    p.appendChild(d);
+const ITEM_HEIGHT = 40;
+const picker = document.getElementById("pick");
+const output = document.getElementById("out");
+
+/* Puffer oben & unten (damit Scrollen über 00 möglich ist) */
+function addSpacer() {
+    const spacer = document.createElement("div");
+    spacer.style.height = ITEM_HEIGHT + "px";
+    spacer.style.opacity = 0; 
+    return spacer;
 }
+
+/* Inhalt erzeugen */
+picker.appendChild(addSpacer());   // oberer Puffer
+
+for (let i = 0; i <= 59; i++) {
+    const d = document.createElement("div");
+    d.innerText = i.toString().padStart(2, "0");
+    picker.appendChild(d);
+}
+
+picker.appendChild(addSpacer());   // unterer Puffer
+
+/* Start: Wert in der Mitte = 30 */
+picker.scrollTop = (1 + 30) * ITEM_HEIGHT;  // wegen Puffer
+
+/* Snap + Auswahl */
+picker.addEventListener("scroll", () => {
+    clearTimeout(picker._t);
+    picker._t = setTimeout(() => {
+
+        let idx = Math.round(picker.scrollTop / ITEM_HEIGHT);
+
+        // Snap
+        picker.scrollTop = idx * ITEM_HEIGHT;
+
+        // Ausgabe: echten Wert berechnen
+        let value = idx - 1;  // Puffer oben ignorieren
+        if (value < 0) value = 0;
+        if (value > 59) value = 59;
+
+        output.innerText = value.toString().padStart(2,"0");
+
+    },120);
+});
 </script>
 
 </body>
