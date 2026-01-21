@@ -94,19 +94,19 @@ body {
 
 <body>
 
-<h1>M5Dial Konfigurator</h1>
+<h1>Nachtlicht Konfigurator</h1>
 
 <button id="connectBtn">🔗 Gerät verbinden</button>
 
 <div id="settings">
 
     <!-- SLIDER -->
-    <h2>Parameter A: <span id="valueA">0</span></h2>
+    <h2>Helligkeit: <span id="valueA">0</span></h2>
     <input type="range" min="0" max="255" id="sliderA" style="width:90%;">
 
     <!-- TIMER 1 -->
     <div class="timer-block">
-        <h2>⏱ Timer 1</h2>
+        <h2>⏱ An-Dauer</h2>
         <div class="picker-row">
             <div class="pickerWrapper">
                 <div class="picker t1" id="t1h"></div>
@@ -125,7 +125,7 @@ body {
 
     <!-- TIMER 2 -->
     <div class="timer-block">
-        <h2>⏱ Timer 2</h2>
+        <h2>⏱ Langsames Ausschalten</h2>
         <div class="picker-row">
             <div class="pickerWrapper">
                 <div class="picker t2" id="t2h"></div>
@@ -149,6 +149,38 @@ let charWrite32 = null;
 
 const ITEM_HEIGHT = 40;
 
+
+let lastSent = {0:null,1:null,2:null};
+
+async function connectBLE() {
+    // bestehender Code…
+    notifyChar = await service.getCharacteristic(NOTIFY_UUID);
+    await notifyChar.startNotifications();
+
+    notifyChar.addEventListener("characteristicvaluechanged", e => {
+        const v = e.target.value;
+        const id = v.getUint8(0);
+        const val = v.getUint32(1, true);
+
+        if (val === lastSent[id]) {
+            markOK(id, true);
+        } else {
+            markOK(id, false);
+        }
+    });
+}
+
+function markOK(id, ok) {
+    let el = null;
+    if (id === 0) el = document.querySelector("#timer1Status");
+    if (id === 1) el = document.querySelector("#timer2Status");
+    if (id === 2) el = document.querySelector("#sliderA");
+    if (!el) return;
+
+    el.style.color = ok ? "green" : "red";
+}
+
+    
 /* ---------- BLE verbindung ---------- */
 document.getElementById("connectBtn").onclick = async () => {
     const device = await navigator.bluetooth.requestDevice({
@@ -176,6 +208,8 @@ function send32(id, value) {
     b[3] = (value >> 16) & 0xFF;
     b[4] = (value >> 24) & 0xFF;
 
+    lastSent[id] = value;
+    
     charWrite32.writeValue(b);
 }
 
