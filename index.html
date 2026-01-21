@@ -3,105 +3,267 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Timer Test – Mitte funktioniert</title>
+<title>M5Dial Final Config</title>
 
 <style>
 body {
     font-family: sans-serif;
+    max-width: 420px;
+    margin: auto;
     padding: 20px;
-    max-width: 300px;
-    margin: auto;
-}
-
-/* Picker zeigt 3 Werte */
-.picker {
-    width: 100px;
-    height: 120px; /* 3 × 40px */
-    overflow-y: scroll;
-    border: 1px solid black;
-    position: relative;
-    margin: auto;
-}
-
-/* Einzelelement */
-.picker div {
-    height: 40px;
-    line-height: 40px;
-    font-size: 22px;
     text-align: center;
-    border-bottom: 1px solid #ddd;
 }
 
-/* FIXER Balken */
-.picker::after {
-    content: "";
+/* Verbinden-Button */
+#connectBtn {
+    background: linear-gradient(135deg, #4CAF50, #2E7D32);
+    border: none;
+    padding: 16px 32px;
+    border-radius: 12px;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    margin-top: 80px;
+}
+
+#settings {
+    display: none;
+    margin-top: 30px;
+    text-align: center;
+}
+
+/* ---------- PICKER ---------- */
+
+.pickerWrapper {
+    position: relative;
+    width: 100px;
+    height: 120px;  /* 3 × 40px */
+}
+
+.picker {
+    width: 100%;
+    height: 100%;
+    overflow-y: scroll;
+    scrollbar-width: none;
+    overscroll-behavior: contain;
+}
+.picker::-webkit-scrollbar { display:none; }
+
+/* Fixer Marker */
+.centerMarker {
     position: absolute;
-    top: 40px;  /* Mitte (2. von 3 Zeilen) */
     left: 0;
     width: 100%;
     height: 40px;
+    top: 40px; /* Mitte */
     border-top: 2px solid green;
     border-bottom: 2px solid green;
     pointer-events: none;
     z-index: 10;
+}
+
+/* Items (40px hoch, zentriert) */
+.item {
+    height: 40px;
+    position: relative;
+}
+.item span {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 22px;
+}
+
+.picker-row {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 10px;
+}
+
+/* Timer Block */
+.timer-block {
+    background: #f0f0f0;
+    border-radius: 12px;
+    padding: 15px;
+    margin-top: 25px;
 }
 </style>
 </head>
 
 <body>
 
-<h2>Test</h2>
-<div class="picker" id="pick"></div>
-<div>Auswahl: <span id="out">--</span></div>
+<h1>M5Dial Konfigurator</h1>
+
+<button id="connectBtn">🔗 Gerät verbinden</button>
+
+<div id="settings">
+
+    <!-- SLIDER -->
+    <h2>Parameter A: <span id="valueA">0</span></h2>
+    <input type="range" min="0" max="255" id="sliderA" style="width:90%;">
+
+    <!-- TIMER 1 -->
+    <div class="timer-block">
+        <h2>⏱ Timer 1</h2>
+        <div class="picker-row">
+            <div class="pickerWrapper">
+                <div class="picker t1" id="t1h"></div>
+                <div class="centerMarker"></div>
+            </div>
+            <div class="pickerWrapper">
+                <div class="picker t1" id="t1m"></div>
+                <div class="centerMarker"></div>
+            </div>
+            <div class="pickerWrapper">
+                <div class="picker t1" id="t1s"></div>
+                <div class="centerMarker"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TIMER 2 -->
+    <div class="timer-block">
+        <h2>⏱ Timer 2</h2>
+        <div class="picker-row">
+            <div class="pickerWrapper">
+                <div class="picker t2" id="t2h"></div>
+                <div class="centerMarker"></div>
+            </div>
+            <div class="pickerWrapper">
+                <div class="picker t2" id="t2m"></div>
+                <div class="centerMarker"></div>
+            </div>
+            <div class="pickerWrapper">
+                <div class="picker t2" id="t2s"></div>
+                <div class="centerMarker"></div>
+            </div>
+        </div>
+    </div>
+
+</div>
 
 <script>
+let charWrite32 = null;
+
 const ITEM_HEIGHT = 40;
-const pick = document.getElementById("pick");
-const out = document.getElementById("out");
 
-// Puffer
-const topSpacer = document.createElement("div");
-topSpacer.style.height = ITEM_HEIGHT + "px";
-topSpacer.style.opacity = 0;
+/* ---------- BLE verbindung ---------- */
+document.getElementById("connectBtn").onclick = async () => {
+    const device = await navigator.bluetooth.requestDevice({
+        filters: [{ name: "M5DialConfig" }],
+        optionalServices: ["12345678-1234-5678-1234-56789abcdef0"]
+    });
 
-const bottomSpacer = topSpacer.cloneNode(true);
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService("12345678-1234-5678-1234-56789abcdef0");
 
-pick.appendChild(topSpacer);
+    charWrite32 = await service.getCharacteristic("11111111-1234-5678-1234-56789abcdef0");
 
-// echte Werte
-for (let i=0;i<=59;i++){
-    const d=document.createElement("div");
-    d.innerText=i.toString().padStart(2,"0");
-    pick.appendChild(d);
+    document.getElementById("connectBtn").style.display = "none";
+    document.getElementById("settings").style.display = "block";
+};
+
+/* ---------- BLE SENDER ---------- */
+function send32(id, value) {
+    if (!charWrite32) return;
+
+    let b = new Uint8Array(5);
+    b[0] = id; // Timer ID
+    b[1] = value & 0xFF;
+    b[2] = (value >> 8) & 0xFF;
+    b[3] = (value >> 16) & 0xFF;
+    b[4] = (value >> 24) & 0xFF;
+
+    charWrite32.writeValue(b);
 }
 
-pick.appendChild(bottomSpacer);
+/* ---------- SLIDER ---------- */
+document.getElementById("sliderA").oninput = e => {
+    const v = Number(e.target.value);
+    document.getElementById("valueA").innerText = v;
+    send32(2, v);
+};
 
-// Startwert = mittig 30
-pick.scrollTop = (1 + 30) * ITEM_HEIGHT;
+/* ---------- PICKER LOGIK ---------- */
 
+function setupPicker(element, max, callback) {
 
-/* --- KORREKTE MITTELWERTAUSWAHL --- */
-pick.addEventListener("scroll", ()=>{
-    clearTimeout(pick._t);
-    pick._t = setTimeout(()=>{
+    // Spacer oben
+    let topSpace = document.createElement("div");
+    topSpace.className="item";
+    topSpace.style.opacity=0;
+    element.appendChild(topSpace);
 
-        // Der Mittelpunkt ist IMMER: scrollTop/40 + 1
-        let idx = Math.round(pick.scrollTop / ITEM_HEIGHT);
+    // Werte
+    for (let i=0;i<=max;i++){
+        let d=document.createElement("div");
+        d.className="item";
+        let s=document.createElement("span");
+        s.innerText = i.toString().padStart(2,"0");
+        d.appendChild(s);
+        element.appendChild(d);
+    }
 
-        // korrektes Snapping:
-        pick.scrollTop = idx * ITEM_HEIGHT;
+    // Spacer unten
+    let bottomSpace = topSpace.cloneNode(true);
+    element.appendChild(bottomSpace);
 
-        // echte Werte sind verschoben um +1 wegen TopSpacer
-        let selected = idx - 1;
+    // Start bei 0
+    element.scrollTop = ITEM_HEIGHT;
 
-        if (selected < 0) selected = 0;
-        if (selected > 59) selected = 59;
+    element.addEventListener("scroll", ()=>{
+        clearTimeout(element._t);
+        element._t = setTimeout(()=>{
 
-        out.innerText = selected.toString().padStart(2,"0");
+            let idx = Math.round(element.scrollTop / ITEM_HEIGHT);
 
-    },120);
+            element.scrollTop = idx * ITEM_HEIGHT;
+
+            let val = idx; // KEIN -1 → Spacer einkalkuliert
+
+            if (val < 0) val = 0;
+            if (val > max) val = max;
+
+            callback(val);
+
+        },120);
+    });
+}
+
+/* Timer 1 */
+let t1 = {h:0, m:0, s:0};
+
+setupPicker(document.getElementById("t1h"), 23, v=>{
+    t1.h = v;
+    send32(0, t1.h*3600 + t1.m*60 + t1.s);
 });
+setupPicker(document.getElementById("t1m"), 59, v=>{
+    t1.m = v;
+    send32(0, t1.h*3600 + t1.m*60 + t1.s);
+});
+setupPicker(document.getElementById("t1s"), 59, v=>{
+    t1.s = v;
+    send32(0, t1.h*3600 + t1.m*60 + t1.s);
+});
+
+/* Timer 2 */
+let t2 = {h:0, m:0, s:0};
+
+setupPicker(document.getElementById("t2h"), 23, v=>{
+    t2.h = v;
+    send32(1, t2.h*3600 + t2.m*60 + t2.s);
+});
+setupPicker(document.getElementById("t2m"), 59, v=>{
+    t2.m = v;
+    send32(1, t2.h*3600 + t2.m*60 + t2.s);
+});
+setupPicker(document.getElementById("t2s"), 59, v=>{
+    t2.s = v;
+    send32(1, t2.h*3600 + t2.m*60 + t2.s);
+});
+
 </script>
 
 </body>
