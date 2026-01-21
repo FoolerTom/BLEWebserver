@@ -3,65 +3,127 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>M5Dial BLE Config</title>
+<title>M5Dial Konfigurator</title>
+
 <style>
-  body {
-    font-family: sans-serif;
-    padding: 20px;
-    max-width: 400px;
-    margin: auto;
-  }
-  button {
-    padding: 10px 20px;
-    font-size: 16px;
-  }
-  input[type=range] {
-    width: 100%;
-  }
+    body {
+        font-family: sans-serif;
+        padding: 20px;
+        max-width: 420px;
+        margin: auto;
+        text-align: center;
+    }
+
+    /* Schöner Connect-Button */
+    #connectBtn {
+        background: linear-gradient(135deg, #4CAF50, #2E7D32);
+        border: none;
+        padding: 16px 32px;
+        border-radius: 12px;
+        color: white;
+        font-size: 20px;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        transition: transform 0.15s ease, box-shadow 0.2s ease;
+        margin-top: 80px;
+    }
+
+    #connectBtn:hover {
+        transform: scale(1.05);
+        box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+    }
+
+    #settings {
+        display: none;
+        margin-top: 40px;
+        text-align: left;
+    }
+
+    input[type=range] {
+        width: 100%;
+    }
+
+    .timer-input {
+        font-size: 20px;
+        width: 140px;
+        padding: 6px;
+        border-radius: 8px;
+        border: 1px solid #aaa;
+        text-align: center;
+    }
 </style>
 </head>
 <body>
 
-<h1>M5Dial Konfigurator</h1>
+<h1>M5Dial Einstellungen</h1>
 
-<button id="connectBtn">🔗 Verbinden</button>
+<!-- Sichtbar beim Start -->
+<button id="connectBtn">🔗 Gerät verbinden</button>
 
-<h3>Parameter A: <span id="valueA">--</span></h3>
-<input type="range" min="0" max="255" id="sliderA" value="0">
+<!-- Wird NACH erfolgreicher Verbindung sichtbar -->
+<div id="settings">
+
+    <h2>Parameter A: <span id="valueA">--</span></h2>
+    <input type="range" min="0" max="255" id="sliderA">
+
+    <h2>Timer einstellen (h:mm:ss)</h2>
+    <input id="timerField" class="timer-input" type="text" value="0:00:00" />
+
+</div>
 
 <script>
 let paramWrite, paramNotify;
 
 document.getElementById("connectBtn").onclick = async () => {
-  try {
-    const device = await navigator.bluetooth.requestDevice({
-      filters: [{ name: "M5DialConfig" }],
-      optionalServices: ["12345678-1234-5678-1234-56789abcdef0"]
-    });
+    try {
+        const device = await navigator.bluetooth.requestDevice({
+            filters: [{ name: "M5DialConfig" }],
+            optionalServices: ["12345678-1234-5678-1234-56789abcdef0"]
+        });
 
-    const server = await device.gatt.connect();
-    const service = await server.getPrimaryService("12345678-1234-5678-1234-56789abcdef0");
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService("12345678-1234-5678-1234-56789abcdef0");
 
-    paramWrite = await service.getCharacteristic("11111111-1234-5678-1234-56789abcdef0");
-    paramNotify = await service.getCharacteristic("22222222-1234-5678-1234-56789abcdef0");
+        paramWrite = await service.getCharacteristic("11111111-1234-5678-1234-56789abcdef0");
+        paramNotify = await service.getCharacteristic("22222222-1234-5678-1234-56789abcdef0");
 
-    await paramNotify.startNotifications();
-    paramNotify.addEventListener("characteristicvaluechanged", e => {
-      const value = e.target.value.getUint8(0);
-      document.getElementById("valueA").innerText = value;
-      document.getElementById("sliderA").value = value;
-    });
+        // Notifications aktivieren
+        await paramNotify.startNotifications();
+        paramNotify.addEventListener("characteristicvaluechanged", e => {
+            const value = e.target.value.getUint8(0);
+            document.getElementById("valueA").innerText = value;
+            document.getElementById("sliderA").value = value;
+        });
 
-  } catch (e) {
-    alert("Fehler: " + e);
-  }
+        // UI umschalten
+        document.getElementById("connectBtn").style.display = "none";
+        document.getElementById("settings").style.display = "block";
+
+    } catch (e) {
+        alert("Fehler: " + e);
+    }
 };
 
+// Slider → M5Dial
 document.getElementById("sliderA").oninput = async ev => {
-  const v = Number(ev.target.value);
-  document.getElementById("valueA").innerText = v;
-  if (paramWrite) await paramWrite.writeValue(new Uint8Array([v]));
+    const v = Number(ev.target.value);
+    document.getElementById("valueA").innerText = v;
+    if (paramWrite) await paramWrite.writeValue(new Uint8Array([v]));
 };
+
+// Timer-Feld – du kannst entscheiden wie du es senden willst.
+// Aktuell nur Eingabe-Prüfung:
+document.getElementById("timerField").addEventListener("input", ev => {
+    // Sehr einfache Prüfung
+    const val = ev.target.value;
+    const regex = /^[0-9]+:[0-5][0-9]:[0-5][0-9]$/;
+    if (!regex.test(val)) {
+        ev.target.style.borderColor = "red";
+    } else {
+        ev.target.style.borderColor = "#4CAF50";
+        // Hier kannst du später Daten senden, z.B. in Sekunden umrechnen
+    }
+});
 </script>
 
 </body>
