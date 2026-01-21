@@ -14,7 +14,7 @@
         text-align: center;
     }
 
-    /* Schöner Connect-Button */
+    /* Verbinden Button */
     #connectBtn {
         background: linear-gradient(135deg, #4CAF50, #2E7D32);
         border: none;
@@ -27,29 +27,56 @@
         transition: transform 0.15s ease, box-shadow 0.2s ease;
         margin-top: 80px;
     }
-
     #connectBtn:hover {
         transform: scale(1.05);
         box-shadow: 0 6px 16px rgba(0,0,0,0.3);
     }
 
+    /* Inhalt nach Verbindung */
     #settings {
         display: none;
         margin-top: 40px;
         text-align: left;
     }
 
-    input[type=range] {
-        width: 100%;
+    /* Timer Container */
+    .timer-block {
+        margin-top: 30px;
+        padding: 15px;
+        border-radius: 12px;
+        background: #f5f5f5;
     }
 
-    .timer-input {
+    .timer-title {
         font-size: 20px;
-        width: 140px;
-        padding: 6px;
-        border-radius: 8px;
-        border: 1px solid #aaa;
-        text-align: center;
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+
+    .picker-row {
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .picker {
+        width: 30%;
+        height: 120px;
+        overflow-y: scroll;
+        border-radius: 10px;
+        border: 1px solid #bbb;
+        background: #fff;
+        scrollbar-width: thin;
+    }
+
+    .picker div {
+        padding: 10px;
+        font-size: 20px;
+    }
+
+    .picker div.selected {
+        background: #4CAF50;
+        color: white;
+        border-radius: 6px;
     }
 </style>
 </head>
@@ -57,23 +84,41 @@
 
 <h1>M5Dial Einstellungen</h1>
 
-<!-- Sichtbar beim Start -->
+<!-- Nur am Anfang sichtbar -->
 <button id="connectBtn">🔗 Gerät verbinden</button>
 
-<!-- Wird NACH erfolgreicher Verbindung sichtbar -->
+<!-- Inhalt nach BLE-Verbindung -->
 <div id="settings">
 
     <h2>Parameter A: <span id="valueA">--</span></h2>
     <input type="range" min="0" max="255" id="sliderA">
 
-    <h2>Timer einstellen (h:mm:ss)</h2>
-    <input id="timerField" class="timer-input" type="text" value="0:00:00" />
+    <!-- Timer 1 -->
+    <div class="timer-block">
+        <div class="timer-title">⏱ Timer 1</div>
+        <div class="picker-row">
+            <div class="picker" id="t1h"></div>
+            <div class="picker" id="t1m"></div>
+            <div class="picker" id="t1s"></div>
+        </div>
+    </div>
+
+    <!-- Timer 2 -->
+    <div class="timer-block">
+        <div class="timer-title">⏱ Timer 2</div>
+        <div class="picker-row">
+            <div class="picker" id="t2h"></div>
+            <div class="picker" id="t2m"></div>
+            <div class="picker" id="t2s"></div>
+        </div>
+    </div>
 
 </div>
 
 <script>
 let paramWrite, paramNotify;
 
+// BLE Verbinden
 document.getElementById("connectBtn").onclick = async () => {
     try {
         const device = await navigator.bluetooth.requestDevice({
@@ -87,7 +132,6 @@ document.getElementById("connectBtn").onclick = async () => {
         paramWrite = await service.getCharacteristic("11111111-1234-5678-1234-56789abcdef0");
         paramNotify = await service.getCharacteristic("22222222-1234-5678-1234-56789abcdef0");
 
-        // Notifications aktivieren
         await paramNotify.startNotifications();
         paramNotify.addEventListener("characteristicvaluechanged", e => {
             const value = e.target.value.getUint8(0);
@@ -95,7 +139,6 @@ document.getElementById("connectBtn").onclick = async () => {
             document.getElementById("sliderA").value = value;
         });
 
-        // UI umschalten
         document.getElementById("connectBtn").style.display = "none";
         document.getElementById("settings").style.display = "block";
 
@@ -111,19 +154,54 @@ document.getElementById("sliderA").oninput = async ev => {
     if (paramWrite) await paramWrite.writeValue(new Uint8Array([v]));
 };
 
-// Timer-Feld – du kannst entscheiden wie du es senden willst.
-// Aktuell nur Eingabe-Prüfung:
-document.getElementById("timerField").addEventListener("input", ev => {
-    // Sehr einfache Prüfung
-    const val = ev.target.value;
-    const regex = /^[0-9]+:[0-5][0-9]:[0-5][0-9]$/;
-    if (!regex.test(val)) {
-        ev.target.style.borderColor = "red";
-    } else {
-        ev.target.style.borderColor = "#4CAF50";
-        // Hier kannst du später Daten senden, z.B. in Sekunden umrechnen
+//
+// ---------- TIMER PICKER LOGIK ----------
+//
+function buildPicker(element, max) {
+    for (let i = 0; i <= max; i++) {
+        const d = document.createElement("div");
+        d.innerText = i.toString().padStart(2, "0");
+        element.appendChild(d);
     }
-});
+}
+
+// Picker initialisieren
+["t1h","t2h"].forEach(id => buildPicker(document.getElementById(id), 23));
+["t1m","t2m","t1s","t2s"].forEach(id => buildPicker(document.getElementById(id), 59));
+
+// Scroll-Auswahl markieren + Sekunden senden
+function setupPicker(timerName, element, unit) {
+    element.addEventListener("scroll", () => {
+        const index = Math.round(element.scrollTop / 40);
+        [...element.children].forEach((c,i) => c.classList.toggle("selected", i === index));
+
+        updateTimerSeconds(timerName);
+    });
+}
+
+// Timer Sekunden berechnen + BLE senden
+async function updateTimerSeconds(timer) {
+    const h = parseInt(document.querySelector(`#${timer}h .selected`)?.innerText || "0");
+    const m = parseInt(document.querySelector(`#${timer}m .selected`)?.innerText || "0");
+    const s = parseInt(document.querySelector(`#${timer}s .selected`)?.innerText || "0");
+
+    const total = h*3600 + m*60 + s;
+
+    console.log(timer + " → " + total + " Sekunden");
+
+    if (paramWrite) {
+        await paramWrite.writeValue(new Uint8Array([total & 0xFF]));
+    }
+}
+
+// Picker verbinden
+setupPicker("t1", document.getElementById("t1h"));
+setupPicker("t1", document.getElementById("t1m"));
+setupPicker("t1", document.getElementById("t1s"));
+
+setupPicker("t2", document.getElementById("t2h"));
+setupPicker("t2", document.getElementById("t2m"));
+setupPicker("t2", document.getElementById("t2s"));
 </script>
 
 </body>
