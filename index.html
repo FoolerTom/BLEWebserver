@@ -3,48 +3,46 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Timer Minimal Test</title>
+<title>Scroll-Test</title>
 
 <style>
 body {
     font-family: sans-serif;
-    max-width: 320px;
-    margin: auto;
     padding: 20px;
-}
-
-/* Picker-Container */
-.picker {
-    width: 100px;
-    height: 120px;        /* 3 × 40px */
-    overflow-y: scroll;
-    border: 1px solid #aaa;
-    position: relative;
+    max-width: 300px;
     margin: auto;
-    scrollbar-width: none;
-    overscroll-behavior: contain;
-    touch-action: none;
 }
-.picker::-webkit-scrollbar { display: none; }
 
-/* Einzelelement */
+.picker {
+    width: 120px;
+    height: 200px;              /* Größer für sichereres Scrollen */
+    overflow-y: scroll;
+    border: 1px solid black;
+    margin: auto;
+    position: relative;
+
+    /* WICHTIG: Scroll erlauben */
+    touch-action: auto !important;
+    overscroll-behavior: auto !important;
+}
+
 .picker div {
     height: 40px;
     line-height: 40px;
-    font-size: 22px;
+    font-size: 20px;
     text-align: center;
+    border-bottom: 1px solid #ccc;
 }
 
-/* Fester Auswahlbereich */
+/* Fester Balken */
 .picker::after {
     content: "";
     position: absolute;
-    top: 40px;   /* zweite Zeile */
+    top: 80px;     /* irgendwo sichtbar */
     left: 0;
     width: 100%;
     height: 40px;
-    border-top: 2px solid green;
-    border-bottom: 2px solid green;
+    border: 2px solid green;
     pointer-events: none;
     z-index: 10;
 }
@@ -53,39 +51,17 @@ body {
 
 <body>
 
-<h2>Timer-Test</h2>
-<div class="picker" id="test">
-</div>
+<h2>TEST</h2>
+
+<div class="picker" id="pick"></div>
 
 <script>
-const ITEM_HEIGHT = 40;
-const picker = document.getElementById("test");
-
-/* --- Inhalt: NUR einmal 0..59 --- */
-for (let i = 0; i <= 59; i++) {
-    const d = document.createElement("div");
-    d.innerText = i.toString().padStart(2,"0");
-    picker.appendChild(d);
+const p = document.getElementById("pick");
+for (let i=0;i<60;i++){
+    const d=document.createElement("div");
+    d.innerText=i.toString().padStart(2,"0");
+    p.appendChild(d);
 }
-
-/* --- Startposition: mit Wert 30 in der Mitte --- */
-picker.scrollTop = 30 * ITEM_HEIGHT;
-
-/* --- Snap-to-center nach Scrollen --- */
-picker.addEventListener("scroll", ()=>{
-    clearTimeout(picker._t);
-    picker._t = setTimeout(()=>{
-
-        // Index bestimmen
-        let idx = Math.round(picker.scrollTop / ITEM_HEIGHT);
-
-        // Snap
-        picker.scrollTop = idx * ITEM_HEIGHT;
-
-        console.log("Ausgewählt:", idx);
-
-    },120);
-});
 </script>
 
 </body>
