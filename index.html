@@ -48,20 +48,18 @@
     }
     .picker::-webkit-scrollbar { display:none; }
 
-    /* Fixer Marker */
     .centerMarker {
         position: absolute;
         left: 0;
         width: 100%;
         height: 40px;
-        top: 40px; /* Mitte */
+        top: 40px;
         border-top: 2px solid green;
         border-bottom: 2px solid green;
         pointer-events: none;
         z-index: 10;
     }
 
-    /* Items (40px hoch, zentriert) */
     .item {
         height: 40px;
         position: relative;
@@ -80,7 +78,6 @@
         margin-top: 10px;
     }
 
-    /* Timer Block */
     .timer-block {
         background: #f0f0f0;
         border-radius: 12px;
@@ -97,7 +94,7 @@
 
 <body>
 
-<h1>Nachtlicht Konfigurator</h1>
+<h1>*Nachtlicht Konfigurator*</h1>
 
 <button id="connectBtn">Gerät verbinden</button>
 
@@ -156,9 +153,9 @@ const WRITE32_UUID   = "11111111-1234-5678-1234-56789abcdef0";
 const NOTIFY_UUID    = "22222222-1234-5678-1234-56789abcdef0";
 
 /* IDs:
-   0 = Timer 1 (Sekunden total)
-   1 = Timer 2 (Sekunden total)
-   2 = Helligkeit (0..255)
+   0 = Timer 1
+   1 = Timer 2
+   2 = Helligkeit
 */
 
 const ITEM_HEIGHT = 40;
@@ -168,12 +165,23 @@ let server = null;
 let service = null;
 let charWrite32 = null;
 let notifyChar = null;
-    
+
 let keepAlive = null;
+
+/* ================== NEU: Senden verhindern beim Setzen ================== */
+let suppressSend = false;
+
+/* ================== Picker programmgesteuert setzen ================== */
+function setPickerValue(element, value) {
+    suppressSend = true;
+    element.scrollTop = value * ITEM_HEIGHT;
+
+    // Senden kurz unterdrücken
+    setTimeout(() => { suppressSend = false; }, 150);
+}
 
 function startKeepAlive() {
     keepAlive = setInterval(() => {
-        // send32 ignoriert ID=255
         send32(255, 0);
     }, 5000);
 }
@@ -182,8 +190,6 @@ function stopKeepAlive() {
     if (keepAlive) clearInterval(keepAlive);
 }
 
-
-/* ---------- Utils ---------- */
 function pad2(n){ return n.toString().padStart(2, "0"); }
 function formatHMS(totalSeconds) {
     totalSeconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
@@ -198,41 +204,47 @@ function showSettingsUI(show) {
     document.getElementById("connectBtn").style.display = show ? "none" : "inline-block";
 }
 
-/* ---------- Notify Handler (Single Source of Truth) ---------- */
+/* ================== Notify Handler ================== */
 function onNotify(event) {
     const data = event.target.value;
     const id   = data.getUint8(0);
     const val  = data.getUint32(1, true);
 
-    // Konsole zur Diagnose
-    // console.log("RX from M5Dial:", {id, val});
-
     if (id === 2) {
-        // Helligkeit: nur hier setzen (keine optimistische Anzeige)
         document.getElementById("valueA").innerText = val;
-        // Slider-Position an den bestätigten Wert anpassen
         document.getElementById("sliderA").value = val;
-    } else if (id === 0) {
-        // Timer 1
+    }
+
+    if (id === 0) {
         document.getElementById("t1Readout").innerText = formatHMS(val);
-        // Optional: Wenn du die Picker scroll-Position auf den bestätigten Wert setzen willst,
-        // müsstest du hier h/m/s aus totalSeconds zurückrechnen und die Picker programmgesteuert setzen.
-        // In diesem Code lassen wir die Picker-Position wie vom Benutzer, die Anzeige ist aber bestätigt & korrekt.
-    } else if (id === 1) {
-        // Timer 2
+
+        // Zeit aufteilen
+        let h = Math.floor(val / 3600);
+        let m = Math.floor((val % 3600) / 60);
+        let s = val % 60;
+
+        setPickerValue(document.getElementById("t1h"), h);
+        setPickerValue(document.getElementById("t1m"), m);
+        setPickerValue(document.getElementById("t1s"), s);
+    }
+
+    if (id === 1) {
         document.getElementById("t2Readout").innerText = formatHMS(val);
+
+        let h = Math.floor(val / 3600);
+        let m = Math.floor((val % 3600) / 60);
+        let s = val % 60;
+
+        setPickerValue(document.getElementById("t2h"), h);
+        setPickerValue(document.getElementById("t2m"), m);
+        setPickerValue(document.getElementById("t2s"), s);
     }
 }
 
-
 async function requestInitialValues() {
-    // Trigger: M5Dial soll alle Werte zurücksenden
-    // wir schicken eine spezielle ID=99
     send32(99, 0);
 }
 
-    
-/* ---------- BLE: Gemeinsame Connect-Initialisierung ---------- */
 async function setupGattAndUI(gattServer) {
     server = gattServer;
     service = await server.getPrimaryService(SERVICE_UUID);
@@ -242,21 +254,17 @@ async function setupGattAndUI(gattServer) {
     await notifyChar.startNotifications();
     notifyChar.addEventListener("characteristicvaluechanged", onNotify);
 
-    // Disconnect Handling
     device.addEventListener("gattserverdisconnected", onDisconnected);
 
-    // UI schalten
     showSettingsUI(true);
     requestInitialValues();
 }
 
-/* ---------- Disconnect ---------- */
 function onDisconnected() {
-    // UI zurück zur Startansicht
     showSettingsUI(false);
+    stopKeepAlive();
 }
 
-/* ---------- Manuelles Verbinden (Button) ---------- */
 async function connectBLE() {
     try {
         device = await navigator.bluetooth.requestDevice({
@@ -274,17 +282,14 @@ async function connectBLE() {
     }
 }
 
-/* ---------- Auto-Reconnect beim Laden (wenn Browser das Gerät kennt) ---------- */
 async function tryAutoReconnect() {
     try {
         if (!navigator.bluetooth.getDevices) {
-            // Nicht verfügbar -> Button anzeigen
             showSettingsUI(false);
             return;
         }
 
         const knownDevices = await navigator.bluetooth.getDevices();
-        // Suche das Gerät anhand des Namens
         const candidate = knownDevices.find(d => d && d.name === "M5DialConfig");
 
         if (!candidate) {
@@ -294,14 +299,12 @@ async function tryAutoReconnect() {
 
         device = candidate;
 
-        // Bereits verbunden?
         if (device.gatt && device.gatt.connected) {
             await setupGattAndUI(device.gatt);
             startKeepAlive();
             return;
         }
 
-        // Verbinden ohne erneuten Dialog (da bereits erlaubt)
         const gattServer = await device.gatt.connect();
         await setupGattAndUI(gattServer);
         startKeepAlive();
@@ -312,14 +315,12 @@ async function tryAutoReconnect() {
     }
 }
 
-/* ---------- Sender ---------- */
 function send32(id, value) {
     if (!charWrite32) return;
-    // 1 Byte ID + 4 Byte LE
     const b = new Uint8Array(5);
     b[0] = id & 0xFF;
     b[1] =  value        & 0xFF;
-    b[2] = (value >> 8)  & 0xFF;
+    b[2] = (value >>  8) & 0xFF;
     b[3] = (value >> 16) & 0xFF;
     b[4] = (value >> 24) & 0xFF;
 
@@ -328,49 +329,43 @@ function send32(id, value) {
     });
 }
 
-/* ---------- Slider (kein sofortiges UI-Update) ---------- */
 document.getElementById("sliderA").addEventListener("input", (e) => {
     const v = Number(e.target.value);
-    // Anzeige NICHT hier ändern; nur senden.
     send32(2, v);
 });
 
-/* ---------- Picker-Setup ---------- */
+/* ================== Picker Setup ================== */
 function setupPicker(element, max, callback) {
-    // Spacer oben
+
     let topSpace = document.createElement("div");
-    topSpace.className="item";
-    topSpace.style.opacity=0;
+    topSpace.className = "item";
+    topSpace.style.opacity = 0;
     element.appendChild(topSpace);
 
-    // Werte
-    for (let i=0;i<=max;i++){
-        let d=document.createElement("div");
-        d.className="item";
-        let s=document.createElement("span");
-        s.innerText = i.toString().padStart(2,"0");
+    for (let i = 0; i <= max; i++) {
+        let d = document.createElement("div");
+        d.className = "item";
+        let s = document.createElement("span");
+        s.innerText = i.toString().padStart(2, "0");
         d.appendChild(s);
         element.appendChild(d);
     }
 
-    // Spacer unten
-    let bottomSpace = topSpace.cloneNode(true);
-    element.appendChild(bottomSpace);
+    element.appendChild(topSpace.cloneNode(true));
 
-    // Start bei 0 (wie im Original)
     element.scrollTop = ITEM_HEIGHT;
 
     element.addEventListener("scroll", () => {
         clearTimeout(element._t);
         element._t = setTimeout(() => {
+
             let idx = Math.round(element.scrollTop / ITEM_HEIGHT);
             element.scrollTop = idx * ITEM_HEIGHT;
 
-            let val = idx; // KEIN -1 → Spacer einkalkuliert (entspricht deinem Original)
-            if (val < 0) val = 0;
-            if (val > max) val = max;
+            if (!suppressSend) {
+                callback(idx);
+            }
 
-            callback(val);
         }, 120);
     });
 }
@@ -381,7 +376,7 @@ setupPicker(document.getElementById("t1h"), 23, v=>{
     t1.h = v;
     send32(0, t1.h*3600 + t1.m*60 + t1.s);
 });
-setupPicker(document.getElementById("t1m"), 59, v=>{
+setupPieker(document.getElementById("t1m"), 59, v=>{
     t1.m = v;
     send32(0, t1.h*3600 + t1.m*60 + t1.s);
 });
@@ -405,10 +400,8 @@ setupPicker(document.getElementById("t2s"), 59, v=>{
     send32(1, t2.h*3600 + t2.m*60 + t2.s);
 });
 
-/* ---------- UI Events ---------- */
 document.getElementById("connectBtn").addEventListener("click", connectBLE);
 
-/* ---------- Start: Auto-Reconnect versuchen ---------- */
 document.addEventListener("DOMContentLoaded", tryAutoReconnect);
 </script>
 
