@@ -335,9 +335,20 @@ function send32(id, value) {
     });
 }
 
+// Debounce variable
+let brightnessTimeout = null;
+
 document.getElementById("sliderA").addEventListener("input", (e) => {
     const v = Number(e.target.value);
-    send32(2, v);
+    
+    // Clear previous timeout
+    if (brightnessTimeout) clearTimeout(brightnessTimeout);
+    
+    // Set new timeout to send after 200ms delay
+    brightnessTimeout = setTimeout(() => {
+        send32(2, v);
+        brightnessTimeout = null;
+    }, 200);
 });
 
 /* ================== Picker Setup ================== */
