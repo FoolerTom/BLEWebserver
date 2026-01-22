@@ -12,6 +12,8 @@
         margin: auto;
         padding: 20px;
         text-align: center;
+        background: #0f0f0f;
+        color: white;
     }
 
     /* Verbinden-Button */
@@ -102,7 +104,7 @@
 
     <!-- SLIDER -->
     <h2>Helligkeit: <span id="valueA">–</span></h2>
-    <input type="range" min="0" max="255" id="sliderA" style="width:90%;">
+    <input type="range" min="0" max="255" id="sliderA" style="width:100%;">
 
     <!-- TIMER 1 -->
     <div class="timer-block">
@@ -222,6 +224,8 @@ function onNotify(event) {
         let h = Math.floor(val / 3600);
         let m = Math.floor((val % 3600) / 60);
         let s = val % 60;
+      
+        t1.h = h; t1.m = m; t1.s = s;
 
         setPickerValue(document.getElementById("t1h"), h);
         setPickerValue(document.getElementById("t1m"), m);
@@ -234,6 +238,8 @@ function onNotify(event) {
         let h = Math.floor(val / 3600);
         let m = Math.floor((val % 3600) / 60);
         let s = val % 60;
+      
+        t2.h = h; t2.m = m; t2.s = s;
 
         setPickerValue(document.getElementById("t2h"), h);
         setPickerValue(document.getElementById("t2m"), m);
