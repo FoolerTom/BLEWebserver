@@ -161,16 +161,13 @@ const NOTIFY_UUID    = "22222222-1234-5678-1234-56789abcdef0";
 */
 
 const ITEM_HEIGHT = 40;
-
 let device = null;
 let server = null;
 let service = null;
 let charWrite32 = null;
 let notifyChar = null;
-
 let keepAlive = null;
-
-/* ================== NEU: Senden verhindern beim Setzen ================== */
+let lastBrightnessSend = 0;
 let suppressSend = false;
 
 /* ================== Picker programmgesteuert setzen ================== */
@@ -335,20 +332,20 @@ function send32(id, value) {
     });
 }
 
-// Debounce variable
-let brightnessTimeout = null;
-
 document.getElementById("sliderA").addEventListener("input", (e) => {
-    const v = Number(e.target.value);
-    
-    // Clear previous timeout
-    if (brightnessTimeout) clearTimeout(brightnessTimeout);
-    
-    // Set new timeout to send after 200ms delay
-    brightnessTimeout = setTimeout(() => {
+    const now = Date.now();
+    if (now - lastBrightnessSend >= 200) {
+        const v = Number(e.target.value);
         send32(2, v);
-        brightnessTimeout = null;
-    }, 200);
+        lastBrightnessSend = now;
+    }
+});
+
+// Send immediately on release
+document.getElementById("sliderA").addEventListener("change", (e) => {
+    const v = Number(e.target.value);
+    send32(2, v);
+    lastBrightnessSend = Date.now(); // update timestamp to prevent immediate re-send
 });
 
 /* ================== Picker Setup ================== */
