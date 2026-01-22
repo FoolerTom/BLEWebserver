@@ -96,7 +96,7 @@
 
 <body>
 
-<h1>*Nachtlicht Konfigurator*2</h1>
+<h1>Nachtlicht Konfigurator</h1>
 
 <button id="connectBtn">Gerät verbinden</button>
 
@@ -274,9 +274,9 @@ function onDisconnected() {
 async function connectBLE() {
     try {
         device = await navigator.bluetooth.requestDevice({
-            filters: [{ name: "M5DialConfig" }],
-            optionalServices: [SERVICE_UUID]
-        });
+        acceptAllDevices: true,
+        optionalServices: [SERVICE_UUID]
+    });
 
         const gattServer = await device.gatt.connect();
         await setupGattAndUI(gattServer);
