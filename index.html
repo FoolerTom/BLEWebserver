@@ -334,7 +334,7 @@ function send32(id, value) {
 
 document.getElementById("sliderA").addEventListener("input", (e) => {
     const now = Date.now();
-    if (now - lastBrightnessSend >= 200) {
+    if (now - lastBrightnessSend >= 50) {
         const v = Number(e.target.value);
         send32(2, v);
         lastBrightnessSend = now;
