@@ -269,14 +269,23 @@ function onDisconnected() {
 }
 
 async function connectBLE() {
+  console.log("connectBLE called");
+  if (!navigator.bluetooth) {
+    alert("Web Bluetooth wird von diesem Browser nicht unterstützt. Verwende Safari auf iOS 16.4+ über HTTPS.");
+    console.error("navigator.bluetooth not available");
+    return;
+  }
+  console.log("navigator.bluetooth available, requesting device...");
   try {
     // iOS erfordert Filter nach Service-UUID, nicht nach Name
     device = await navigator.bluetooth.requestDevice({
       filters: [{ services: ["12345678-1234-5678-1234-56789abcdef0"] }],  // SERVICE_UUID
       optionalServices: [SERVICE_UUID]
     });
+    console.log("Device selected:", device.name);
 
     const gattServer = await device.gatt.connect();
+    console.log("GATT connected");
     await setupGattAndUI(gattServer);
     startKeepAlive();
   } catch (err) {
