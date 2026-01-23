@@ -269,20 +269,21 @@ function onDisconnected() {
 }
 
 async function connectBLE() {
-    try {
-        device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: [SERVICE_UUID]
+  try {
+    // iOS erfordert Filter nach Service-UUID, nicht nach Name
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: ["12345678-1234-5678-1234-56789abcdef0"] }],  // SERVICE_UUID
+      optionalServices: [SERVICE_UUID]
     });
 
-        const gattServer = await device.gatt.connect();
-        await setupGattAndUI(gattServer);
-        startKeepAlive();
-    } catch (err) {
-        console.error("BLE connect failed:", err);
-        showSettingsUI(false);
-        stopKeepAlive();
-    }
+    const gattServer = await device.gatt.connect();
+    await setupGattAndUI(gattServer);
+    startKeepAlive();
+  } catch (err) {
+    console.error("BLE connect failed:", err);
+    showSettingsUI(false);
+    stopKeepAlive();
+  }
 }
 
 async function tryAutoReconnect() {
