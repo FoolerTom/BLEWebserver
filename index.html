@@ -271,7 +271,7 @@ function onDisconnected() {
 async function connectBLE() {
   console.log("connectBLE called");
   if (!navigator.bluetooth) {
-    alert("Web Bluetooth wird von diesem Browser nicht unterstützt. Getestet sind Chrome auf Android und "<a href="https://apps.apple.com/ch/app/bluefy-web-ble-browser/id1492822055">Bluefy</a>" auf iOS.");
+    alert("Web Bluetooth wird von diesem Browser nicht unterstützt. Getestet sind Chrome auf Android und"/*https://apps.apple.com/ch/app/bluefy-web-ble-browser/id1492822055*/"Bluefy auf iOS.");
     console.error("navigator.bluetooth not available");
     return;
   }
