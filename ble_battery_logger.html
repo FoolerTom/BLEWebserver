@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BLE Akku-Logger</title>
+  <style>
+    :root { --accent:#0a84ff; }
+    body { font-family: system-ui, Arial, sans-serif; margin: 1rem; }
+    .row { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+    .card h3 { margin-top: 0; }
+    button { padding: 0.6rem 1rem; border: 1px solid #bbb; border-radius: 6px; background:#fff; cursor: pointer; }
+    button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    input[type="number"] { width: 7rem; padding: 0.3rem; }
+    canvas { max-width: 100%; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; }
+    .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h1>BLE Akku-Logger</h1>
+  <p>Verbinde dich mit dem Mikrocontroller, rufe geloggte Werte ab oder zeichne live mit. Die Messmethode entspricht deiner Firmware (Median + Mapping auf Millivolt). CSV-Export inklusive.</p>
+
+  <div class="row">
+    <div class="card" style="flex:2; min-width: 320px;">
+      <h3>Verbindung & Steuerung</h3>
+      <div class="grid">
+        <div>
+          <button id="btnConnect" class="primary">Verbinden</button>
+          <button id="btnDisconnect" disabled>Trennen</button>
+          <label style="margin-left:1rem"><input type="checkbox" id="keepAwake"> Bildschirm wach halten</label>
+        </div>
+        <div>
+          <button id="btnStart" disabled>Logging starten</button>
+          <button id="btnStop" disabled>Logging stoppen</button>
+          <button id="btnClear" disabled>Buffer löschen</button>
+        </div>
+        <div>
+          <label>Intervall (s): <input id="period" type="number" value="60" min="1" step="1"></label>
+          <button id="btnSetPeriod" disabled>Setzen</button>
+        </div>
+      </div>
+      <hr>
+      <h3>Abruf (Streaming)</h3>
+      <div class="grid">
+        <div>
+          <button id="btnFetchAll" disabled>Alle Daten abrufen</button>
+          <button id="btnClearChart" disabled>Diagramm leeren</button>
+        </div>
+        <div>
+          <button id="btnFetch24h10m" disabled>Letzte 24&nbsp;h (~10&nbsp;min)</button>
+        </div>
+        <div>
+          <label>Letzte (h): <input id="hours" type="number" value="24" min="1" step="1"></label>
+          <label>Schritt (min): <input id="stepMin" type="number" value="10" min="1" step="1"></label>
+          <button id="btnFetchCustom" disabled>Abrufen</button>
+        </div>
+        <div>
+          <button id="btnExport" disabled>CSV exportieren</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="flex:1; min-width: 260px;">
+      <h3>Status</h3>
+      <div class="grid">
+        <div>Verbunden: <span id="statusConn">Nein</span></div>
+        <div>Intervall (s): <span id="statusPeriod" class="mono">-</span></div>
+        <div>Max. Samples: <span id="statusMax" class="mono">-</span></div>
+        <div>Aktuell gespeichert: <span id="statusCurr" class="mono">-</span></div>
+        <div>Gesamt seit Start: <span id="statusTotal" class="mono">-</span></div>
+        <div>Letzter mV: <span id="statusVolt" class="mono">-</span></div>
+        <div>Letzter ADC: <span id="statusAdc" class="mono">-</span></div>
+        <div>Empfangene Pakete (SAMPLE): <span id="statusPkts" class="mono">0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card" style="flex:1; min-width: 380px;">
+      <h3>Live & Abrufdiagramm</h3>
+      <canvas id="chart"></canvas>
+    </div>
+  </div>
+
+<script>
+// ====== UUIDs (müssen zur Firmware passen) ======
+const LOGGER_SERVICE_UUID      = 'b0b00001-6e2b-4fcb-9da9-5a0b1d2f00a1';
+const LOGGER_SAMPLE_CHAR_UUID  = 'b0b00002-6e2b-4fcb-9da9-5a0b1d2f00a1'; // Notify: 8B = [u32 t_s][u16 mV][u16 adc]
+const LOGGER_VOLTAGE_CHAR_UUID = 'b0b00003-6e2b-4fcb-9da9-5a0b1d2f00a1'; // Read/Notify: 2B = mV
+const LOGGER_CTRL_CHAR_UUID    = 'b0b00004-6e2b-4fcb-9da9-5a0b1d2f00a1'; // Write: Kommandos
+const LOGGER_INFO_CHAR_UUID    = 'b0b00005-6e2b-4fcb-9da9-5a0b1d2f00a1'; // Read: 16B = meta
+const LOGGER_ADC_CHAR_UUID     = 'b0b00006-6e2b-4fcb-9da9-5a0b1d2f00a1'; // Read/Notify: 2B = adc raw
+
+// ====== Globals ======
+let device, server, service;
+let chSample, chVoltage, chCtrl, chInfo, chAdc;
+let wakeLock = null;
+let info = { totalSamples:0, period_s:0, max_samples:0, current_count:0 };
+let samples = []; // {t_s, mV, adc}
+
+const $ = id => document.getElementById(id);
+
+// ====== Chart (2 y-Achsen: mV & ADC) ======
+const ctx = $("chart").getContext("2d");
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label:'Spannung [mV]', data: [], borderColor:'#0a84ff', yAxisID:'y', tension:0.15 },
+      { label:'ADC (roh)', data: [], borderColor:'#ff7a00', yAxisID:'y1', tension:0.15 }
+    ]
+  },
+  options: {
+    responsive: true,
+    animation: false,
+    scales: {
+      x: { title: { display:true, text:'Zeit [s]' } },
+      y: { title: { display:true, text:'mV' }, position:'left' },
+      y1: { title: { display:true, text:'ADC' }, position:'right', grid: { drawOnChartArea:false } }
+    },
+    plugins: { legend: { display: true } }
+  }
+});
+
+function updateStatus() {
+  $("statusPeriod").textContent = info.period_s;
+  $("statusMax").textContent    = info.max_samples;
+  $("statusCurr").textContent   = info.current_count;
+  $("statusTotal").textContent  = info.totalSamples;
+}
+
+function pushToChart(s) {
+  samples.push(s);
+  $("statusPkts").textContent = samples.length;
+  chart.data.labels.push(s.t_s);
+  chart.data.datasets[0].data.push(s.mV);
+  chart.data.datasets[1].data.push(s.adc);
+  chart.update('none');
+}
+
+function clearChartAndData() {
+  samples = [];
+  chart.data.labels.length = 0;
+  chart.data.datasets[0].data.length = 0;
+  chart.data.datasets[1].data.length = 0;
+  chart.update();
+  $("statusPkts").textContent = 0;
+}
+
+// ====== Connect / Disconnect ======
+async function connect() {
+  try {
+    device = await navigator.bluetooth.requestDevice({ filters: [{ services: [LOGGER_SERVICE_UUID] }] });
+    device.addEventListener('gattserverdisconnected', onDisconnected);
+    server = await device.gatt.connect();
+    service = await server.getPrimaryService(LOGGER_SERVICE_UUID);
+
+    chSample  = await service.getCharacteristic(LOGGER_SAMPLE_CHAR_UUID);
+    chVoltage = await service.getCharacteristic(LOGGER_VOLTAGE_CHAR_UUID);
+    chCtrl    = await service.getCharacteristic(LOGGER_CTRL_CHAR_UUID);
+    chInfo    = await service.getCharacteristic(LOGGER_INFO_CHAR_UUID);
+    chAdc     = await service.getCharacteristic(LOGGER_ADC_CHAR_UUID);
+
+    // INFO lesen
+    const dv = await (await chInfo.readValue());
+    info.totalSamples  = dv.getUint32(0, true);
+    info.period_s      = dv.getUint32(4, true);
+    info.max_samples   = dv.getUint32(8, true);
+    info.current_count = dv.getUint32(12, true);
+    updateStatus();
+    $("period").value = info.period_s || 60;
+
+    // Notifications
+    await chSample.startNotifications();
+    chSample.addEventListener('characteristicvaluechanged', ev => {
+      const dv = ev.target.value;
+      const t_s = dv.getUint32(0, true);
+      const mV  = dv.getUint16(4, true);
+      const adc = dv.getUint16(6, true);
+      $("statusVolt").textContent = mV;
+      $("statusAdc").textContent = adc;
+      pushToChart({ t_s, mV, adc });
+    });
+
+    try {
+      await chVoltage.startNotifications();
+      chVoltage.addEventListener('characteristicvaluechanged', ev => {
+        const mV = ev.target.value.getUint16(0, true);
+        $("statusVolt").textContent = mV;
+      });
+    } catch {}
+
+    try {
+      await chAdc.startNotifications();
+      chAdc.addEventListener('characteristicvaluechanged', ev => {
+        const adc = ev.target.value.getUint16(0, true);
+        $("statusAdc").textContent = adc;
+      });
+    } catch {}
+
+    $("statusConn").textContent = 'Ja';
+    $("btnDisconnect").disabled = false;
+    $("btnStart").disabled = false;
+    $("btnStop").disabled = false;
+    $("btnClear").disabled = false;
+    $("btnSetPeriod").disabled = false;
+    $("btnFetchAll").disabled = false;
+    $("btnFetch24h10m").disabled = false;
+    $("btnFetchCustom").disabled = false;
+    $("btnClearChart").disabled = false;
+    $("btnExport").disabled = false;
+  } catch (err) {
+    alert('Verbindung fehlgeschlagen: ' + err);
+    console.error(err);
+  }
+}
+
+function onDisconnected() {
+  $("statusConn").textContent = 'Nein';
+  $("btnDisconnect").disabled = true;
+  $("btnStart").disabled = true;
+  $("btnStop").disabled = true;
+  $("btnClear").disabled = true;
+  $("btnSetPeriod").disabled = true;
+  $("btnFetchAll").disabled = true;
+  $("btnFetch24h10m").disabled = true;
+  $("btnFetchCustom").disabled = true;
+  $("btnClearChart").disabled = true;
+  $("btnExport").disabled = true;
+}
+
+async function disconnect() {
+  try { if (server && server.connected) server.disconnect(); } catch {}
+}
+
+// ====== CTRL helpers ======
+async function sendCtrl(bytes) {
+  if (!chCtrl) return;
+  await chCtrl.writeValue(Uint8Array.from(bytes));
+}
+
+async function setPeriod() {
+  const p = parseInt($("period").value, 10) || 60;
+  await sendCtrl([0x10, p & 0xFF, (p>>8)&0xFF, (p>>16)&0xFF, (p>>24)&0xFF]);
+  // INFO erneut lesen
+  const dv = await (await chInfo.readValue());
+  info.totalSamples  = dv.getUint32(0, true);
+  info.period_s      = dv.getUint32(4, true);
+  info.max_samples   = dv.getUint32(8, true);
+  info.current_count = dv.getUint32(12, true);
+  updateStatus();
+}
+
+async function startLogging() { await sendCtrl([0x01]); }
+async function stopLogging()  { await sendCtrl([0x00]); }
+async function clearBuffer()  {
+  await sendCtrl([0x02]);
+  // INFO neu lesen
+  const dv = await (await chInfo.readValue());
+  info.totalSamples  = dv.getUint32(0, true);
+  info.period_s      = dv.getUint32(4, true);
+  info.max_samples   = dv.getUint32(8, true);
+  info.current_count = dv.getUint32(12, true);
+  updateStatus();
+  clearChartAndData();
+}
+
+async function requestStream(startIdx, step, count) {
+  if (step < 1) step = 1;
+  const b = new Uint8Array(1+12);
+  b[0] = 0x20;
+  // startIdx
+  b[1] = startIdx & 0xFF; b[2] = (startIdx>>8)&0xFF; b[3] = (startIdx>>16)&0xFF; b[4] = (startIdx>>24)&0xFF;
+  // step
+  b[5] = step & 0xFF; b[6] = (step>>8)&0xFF; b[7] = (step>>16)&0xFF; b[8] = (step>>24)&0xFF;
+  // count
+  b[9] = count & 0xFF; b[10] = (count>>8)&0xFF; b[11] = (count>>16)&0xFF; b[12] = (count>>24)&0xFF;
+  await sendCtrl(b);
+}
+
+// ====== Fetch helpers ======
+function clampStartToAvailable(start) {
+  const oldest = Math.max(0, info.totalSamples - info.current_count);
+  return Math.max(oldest, Math.min(start, info.totalSamples));
+}
+
+async function fetchAll() {
+  clearChartAndData();
+  // Re-READ INFO to get latest counters
+  const dv = await (await chInfo.readValue());
+  info.totalSamples  = dv.getUint32(0, true);
+  info.period_s      = dv.getUint32(4, true);
+  info.max_samples   = dv.getUint32(8, true);
+  info.current_count = dv.getUint32(12, true);
+  updateStatus();
+
+  const start = clampStartToAvailable( info.totalSamples - info.current_count );
+  const count = info.current_count;
+  await requestStream(start, 1, count);
+}
+
+async function fetch24h10m() {
+  clearChartAndData();
+  const dv = await (await chInfo.readValue());
+  info.totalSamples  = dv.getUint32(0, true);
+  info.period_s      = dv.getUint32(4, true);
+  info.max_samples   = dv.getUint32(8, true);
+  info.current_count = dv.getUint32(12, true);
+  updateStatus();
+
+  const seconds = 24*3600;
+  let step = Math.max(1, Math.round(600 / info.period_s)); // 600s = 10min
+  const countWanted = Math.floor(seconds / (step * info.period_s));
+  const start = clampStartToAvailable( info.totalSamples - (countWanted * step) );
+  await requestStream(start, step, countWanted);
+}
+
+async function fetchCustom() {
+  clearChartAndData();
+  const dv = await (await chInfo.readValue());
+  info.totalSamples  = dv.getUint32(0, true);
+  info.period_s      = dv.getUint32(4, true);
+  info.max_samples   = dv.getUint32(8, true);
+  info.current_count = dv.getUint32(12, true);
+  updateStatus();
+
+  const hours = Math.max(1, parseInt($("hours").value, 10) || 24);
+  const stepMin = Math.max(1, parseInt($("stepMin").value, 10) || 10);
+  const seconds = hours * 3600;
+  let step = Math.max(1, Math.round((stepMin*60) / info.period_s));
+  const countWanted = Math.floor(seconds / (step * info.period_s));
+  const start = clampStartToAvailable( info.totalSamples - (countWanted * step) );
+  await requestStream(start, step, countWanted);
+}
+
+// ====== CSV Export ======
+function exportCSV() {
+  const rows = [['t_s','mV','adc'], ...samples.map(s => [s.t_s, s.mV, s.adc])];
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'akku_log.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ====== Wake Lock ======
+$("keepAwake").onchange = async (ev) => {
+  if (ev.target.checked) {
+    try { wakeLock = await navigator.wakeLock.request('screen'); }
+    catch (e) { alert('Wake Lock nicht verfügbar: ' + e); ev.target.checked = false; }
+  } else {
+    try { if (wakeLock) { await wakeLock.release(); wakeLock = null; } } catch {}
+  }
+};
+
+// ====== Hooks ======
+$("btnConnect").onclick = connect;
+$("btnDisconnect").onclick = disconnect;
+$("btnStart").onclick = startLogging;
+$("btnStop").onclick  = stopLogging;
+$("btnClear").onclick = clearBuffer;
+$("btnSetPeriod").onclick = setPeriod;
+$("btnFetchAll").onclick = fetchAll;
+$("btnFetch24h10m").onclick = fetch24h10m;
+$("btnFetchCustom").onclick = fetchCustom;
+$("btnClearChart").onclick = clearChartAndData;
+$("btnExport").onclick = exportCSV;
+</script>
+
+<p style="margin-top:2rem; color:#555;">
+  Hinweis: Web Bluetooth funktioniert zuverlässig in modernen Chromium-basierten Browsern (z.&nbsp;B. Chrome/Edge auf Android). Einige Browser pausieren JavaScript, sobald die Seite nicht sichtbar ist; nutze ggf. den "Bildschirm wach halten"-Schalter oben. Unterstützung und Beispiele zur Web Bluetooth API findest du in den offiziellen Demos und Spezifikationshinweisen.
+</p>
+</body>
+</html>
