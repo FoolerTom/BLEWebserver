@@ -1,17 +1,14 @@
 #include <Arduino.h>
-#include <nrf.h>
+//#include <nrf.h>
 
 #define WAKE_PIN P0_3   // D1
 // Quadrature Encoder Pins (Hardware QDEC)
-#define ENC_A_PIN P0_28  // P0.28 (D2)
-#define ENC_B_PIN P0_29  // P0.29 (D3)
+#define ENC_A_PIN P0_29  // P0.28 (D2)
+#define ENC_B_PIN P0_28  // P0.29 (D3)
 
 long encoderCount = 0;
 
-
-void wakeup() { // Wird beim Aufwachen NICHT ausgeführt – aber muss existieren 
-  // Nur um zu zeigen, dass der Interrupt funktioniert
-}
+void wakeup(){} // Wird beim Aufwachen NICHT ausgeführt – aber muss existieren 
 
 void setup() {
   // put your setup code here, to run once:
@@ -44,11 +41,14 @@ void setup() {
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  // Read the accumulator value
-  encoderCount = NRF_QDEC->ACC;
-  Serial.println(encoderCount);
-  if(abs(encoderCount) >= 100) {
+  if(NRF_QDEC->EVENTS_REPORTRDY)
+  {
+    NRF_QDEC->TASKS_READCLRACC = 1; 
+    encoderCount += NRF_QDEC->ACCREAD + NRF_QDEC->ACCDBLREAD;
+    Serial.println(encoderCount);
+    NRF_QDEC->EVENTS_REPORTRDY = 0; // Clear event flag
+  }
+  if(abs(encoderCount) >= 5000) {
     NRF_QDEC->TASKS_STOP = 1; 
     NRF_QDEC->ENABLE = 0; 
     NRF_PWM0->ENABLE = 0; 
@@ -59,7 +59,9 @@ void loop() {
     //BLE.end();
     NRF_POWER->SYSTEMOFF = 1;
   }
-  delay(100);
+  //delay(100);
 }
+
+
 
 
