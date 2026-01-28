@@ -34,7 +34,7 @@ void loop()
   else
   {
     ASum/=10;
-    float VBat = float(map(ASum, 0, 4093, 0, 7140))/100.0; //theoretischer Wert 7106, hier wurde fine-getuned
+    float VBat = float(map(ASum, 0, 4093, 0, 7140))/100.0; //theoretischer Wert 7106 (1000*VRef*(R1+R2)/R2), hier wurde fine-getuned
     nrf_gpio_pin_toggle(LED_BLUE);
     Serial.println(VBat);
     ASum = 0;
