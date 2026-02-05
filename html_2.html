@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M5Dial Final Config</title>
+<style>
+ body {
+   font-family: sans-serif;
+   max-width: 420px;
+   margin: auto;
+   padding: 20px;
+   text-align: center;
+   background: #0f0f0f;
+   color: white;
+ }
+ #connectBtn {
+   background: linear-gradient(135deg, #4CAF50, #2E7D32);
+   border: none;
+   padding: 16px 32px;
+   border-radius: 12px;
+   color: white;
+   font-size: 20px;
+   cursor: pointer;
+   box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+   margin-top: 80px;
+   display: none;
+ }
+ #settings {
+   display: ;
+   margin-top: 30px;
+   text-align: center;
+ }
+ 
+/* Helligkeit Slider Style */
+#sliderA {
+  -webkit-appearance: none;
+  height: 14px;
+  border-radius: 10px;
+  background: linear-gradient(to right, #000, #555, #ddd, #fff);
+  outline: none;
+  margin-top: 10px;
+}
+
+/* Thumb Design */
+#sliderA::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px;
+  height: 26px;
+  background: white;
+  border-radius: 50%;
+  border: 2px solid #333;
+  cursor: pointer;
+}
+#sliderA::-moz-range-thumb {
+  width: 26px;
+  height: 26px;
+  background: white;
+  border-radius: 50%;
+  border: 2px solid #333;
+  cursor: pointer;
+}
+
+
+/* Lichttemperatur Slider (Neutralweiß → Warmweiß) */
+#sliderB {
+  -webkit-appearance: none;
+  height: 14px;
+  border-radius: 10px;
+  background: linear-gradient(to right, #ffffff, #ffe4c7, #ffb76b);
+  outline: none;
+  margin-top: 10px;
+}
+
+/* Thumb Design */
+#sliderB::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px;
+  height: 26px;
+  background: white;
+  border-radius: 50%;
+  border: 2px solid #333;
+  cursor: pointer;
+}
+#sliderB::-moz-range-thumb {
+  width: 26px;
+  height: 26px;
+  background: white;
+  border-radius: 50%;
+  border: 2px solid #333;
+  cursor: pointer;
+}
+
+
+ /* Akkuanzeige */
+ 
+
+#batteryIcon {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 42px;
+  height: 20px;
+  border: 2px solid #ffb76b;
+  border-radius: 4px;
+  color: #ffb76b;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.8;
+}
+
+#batteryIcon::after {
+  content: "";
+  position: absolute;
+  right: -6px;
+  top: 5px;
+  width: 4px;
+  height: 10px;
+  background: #ffb76b;
+  border-radius: 2px;
+}
+
+
+
+
+
+ .pickerWrapper {
+   position: relative;
+   width: 100px;
+   height: 120px;
+ }
+ .picker {
+   width: 100%;
+   height: 100%;
+   overflow-y: scroll;
+   scrollbar-width: none;
+   overscroll-behavior: contain;
+ }
+ .picker::-webkit-scrollbar { display:none; }
+.centerMarker {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 40px;
+  top: 40px;
+  border-top: 2px solid #ffb76b;   /* warm instead of green */
+  border-bottom: 2px solid #ffb76b;
+  pointer-events: none;
+  z-index: 10;
+}
+ .item { height: 40px; position: relative; }
+ .item span {
+   position: absolute;
+   top: 50%;
+   left: 50%;
+   transform: translate(-50%, -50%);
+   font-size: 22px;
+ }
+ .picker-row {
+   display: flex;
+   justify-content: space-around;
+   margin-top: 10px;
+ }
+
+.timer-block {
+  background: #1a1a1a;          /* dunkler, wärmer */
+  border-radius: 12px;
+  padding: 15px;
+  margin-top: 25px;
+  border: 1px solid #3a3a3a;    /* leichte Kontur */
+  box-shadow: 0 0 12px rgba(255, 183, 107, 0.08); /* warmer Glow */
+}
+
+
+h2 {
+  color: #ffd9b3;  /* warmweiß */
+}
+
+.readout {
+  color: #ffb76b;  /* warmorange */
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  background: #ffffff;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  border: 2px solid #ffb76b;   /* warmes Orange */
+  box-shadow: 0 0 6px rgba(255, 183, 107, 0.4);
+}
+
+input[type="range"]::-moz-range-thumb {
+  background: #ffffff;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  border: 2px solid #ffb76b;
+  box-shadow: 0 0 6px rgba(255, 183, 107, 0.4);
+}
+
+
+
+</style>
+</head>
+
+<body>
+<h1>Nachtlicht Konfigurator</h1>
+<button id="connectBtn">Gerät verbinden</button>
+
+<div id="settings">
+  <div id="batteryIcon">--%</div>
+
+    
+  <!-- SLIDER A -->
+  <h2>Helligkeit: <span id="valueA">–</span></h2>
+  <input type="range" min="0" max="255" id="sliderA" style="width:100%;">
+
+  <!-- >>> NEW SLIDER B (Lichttemperatur) -->
+  <h2>Lichttemperatur: <span id="valueB">–</span></h2>
+  <input type="range" min="0" max="255" id="sliderB" style="width:100%;">
+
+  <!-- TIMER 1 -->
+  <div class="timer-block">
+    <h2>An-Dauer</h2>
+    <div class="picker-row">
+      <div class="pickerWrapper"><div class="picker t1" id="t1h"></div><div class="centerMarker"></div></div>
+      <div class="pickerWrapper"><div class="picker t1" id="t1m"></div><div class="centerMarker"></div></div>
+      <div class="pickerWrapper"><div class="picker t1" id="t1s"></div><div class="centerMarker"></div></div>
+    </div>
+    <div class="readout" id="t1Readout">--:--:--</div>
+  </div>
+
+  <!-- TIMER 2 -->
+  <div class="timer-block">
+    <h2>Langsames Ausschalten</h2>
+    <div class="picker-row">
+      <div class="pickerWrapper"><div class="picker t2" id="t2h"></div><div class="centerMarker"></div></div>
+      <div class="pickerWrapper"><div class="picker t2" id="t2m"></div><div class="centerMarker"></div></div>
+      <div class="pickerWrapper"><div class="picker t2" id="t2s"></div><div class="centerMarker"></div></div>
+    </div>
+    <div class="readout" id="t2Readout">--:--:--</div>
+  </div>
+
+</div>
+
+<script>
+/************ BLE UUIDs ************/
+const SERVICE_UUID    = "12345678-1234-5678-1234-56789abcdef0";
+const WRITE32_UUID    = "11111111-1234-5678-1234-56789abcdef0";
+const NOTIFY_UUID     = "22222222-1234-5678-1234-56789abcdef0";
+
+/* IDs:
+ 0 = Timer 1
+ 1 = Timer 2
+ 2 = Helligkeit
+ 3 = Lichttemperatur   <<< NEW
+ 4 = Akkustand         <<< NEW
+*/
+
+const ITEM_HEIGHT = 40;
+let device = null;
+let server = null;
+let service = null;
+let charWrite32 = null;
+let notifyChar = null;
+
+let lastBrightnessSend = 0;
+let lastTempSend = 0;
+let suppressSend = false;
+let keepAlive = null;
+
+/************ Picker helper ************/
+function setPickerValue(element, value) {
+  suppressSend = true;
+  element.scrollTop = value * ITEM_HEIGHT;
+  setTimeout(() => { suppressSend = false; }, 150);
+}
+
+function startKeepAlive() {
+  keepAlive = setInterval(() => { send32(255, 0); }, 5000);
+}
+function stopKeepAlive() { if (keepAlive) clearInterval(keepAlive); }
+
+function pad2(n){ return n.toString().padStart(2,"0"); }
+function formatHMS(total){
+  total = Math.max(0, Math.floor(Number(total)));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
+}
+
+function showSettingsUI(show) {
+  document.getElementById("settings").style.display = show ? "block" : "none";
+  document.getElementById("connectBtn").style.display = show ? "none" : "inline-block";
+}
+
+/************ Notify handler ************/
+function onNotify(event) {
+  const data = event.target.value;
+  const id = data.getUint8(0);
+  const val = data.getUint32(1, true);
+
+  // Helligkeit
+  if (id === 2) {
+    document.getElementById("valueA").innerText = val;
+    document.getElementById("sliderA").value = val;
+  }
+
+  // Lichttemperatur
+  if (id === 3) {
+    document.getElementById("valueB").innerText = val;
+    document.getElementById("sliderB").value = val;
+  }
+
+ 
+    // Akkustand (ID 4)
+    if (id === 4) {
+    const pct = Math.min(100, Math.max(0, val));
+    document.getElementById("batteryIcon").innerText = pct + "%";
+
+    // Farbe abhängig vom Ladezustand
+    const icon = document.getElementById("batteryIcon");
+    if (pct < 20) icon.style.borderColor = icon.style.color = "#ff4444";
+    else if (pct < 50) icon.style.borderColor = icon.style.color = "#ffbb33";
+    else icon.style.borderColor = icon.style.color = "white";
+    }
+
+
+  // Timer 1
+  if (id === 0) {
+    document.getElementById("t1Readout").innerText = formatHMS(val);
+    let h = Math.floor(val / 3600);
+    let m = Math.floor((val % 3600)/60);
+    let s = val % 60;
+    t1.h=h; t1.m=m; t1.s=s;
+    setPickerValue(document.getElementById("t1h"), h);
+    setPickerValue(document.getElementById("t1m"), m);
+    setPickerValue(document.getElementById("t1s"), s);
+  }
+
+  // Timer 2
+  if (id === 1) {
+    document.getElementById("t2Readout").innerText = formatHMS(val);
+    let h = Math.floor(val / 3600);
+    let m = Math.floor((val % 3600)/60);
+    let s = val % 60;
+    t2.h=h; t2.m=m; t2.s=s;
+    setPickerValue(document.getElementById("t2h"), h);
+    setPickerValue(document.getElementById("t2m"), m);
+    setPickerValue(document.getElementById("t2s"), s);
+  }
+}
+
+/************ Requests ************/
+function send32(id, value) {
+  if (!charWrite32) return;
+  const b = new Uint8Array(5);
+  b[0] = id;
+  b[1] = value & 0xFF;
+  b[2] = (value >> 8) & 0xFF;
+  b[3] = (value >> 16) & 0xFF;
+  b[4] = (value >> 24) & 0xFF;
+  charWrite32.writeValue(b).catch(err => console.error("writeValue failed:", err));
+}
+
+async function requestInitialValues() { send32(99, 0); }
+
+/************ Setup ************/
+async function setupGattAndUI(gattServer) {
+  server = gattServer;
+  service = await server.getPrimaryService(SERVICE_UUID);
+
+  charWrite32 = await service.getCharacteristic(WRITE32_UUID);
+  notifyChar = await service.getCharacteristic(NOTIFY_UUID);
+
+  await notifyChar.startNotifications();
+  notifyChar.addEventListener("characteristicvaluechanged", onNotify);
+
+  device.addEventListener("gattserverdisconnected", onDisconnected);
+
+  showSettingsUI(true);
+  requestInitialValues();
+}
+
+function onDisconnected() {
+  showSettingsUI(false);
+  stopKeepAlive();
+}
+
+async function connectBLE() {
+  try {
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [SERVICE_UUID] }],
+      optionalServices: [SERVICE_UUID]
+    });
+    const gattServer = await device.gatt.connect();
+    await setupGattAndUI(gattServer);
+    startKeepAlive();
+  } catch (err) {
+    console.error("BLE connect failed:", err);
+    showSettingsUI(false);
+    stopKeepAlive();
+  }
+}
+
+/************ Sliders ************/
+/* Helligkeit */
+document.getElementById("sliderA").addEventListener("input", e => {
+  const now = Date.now();
+  if (now - lastBrightnessSend >= 50) {
+    send32(2, Number(e.target.value));
+    lastBrightnessSend = now;
+  }
+});
+document.getElementById("sliderA").addEventListener("change", e => {
+  send32(2, Number(e.target.value));
+});
+
+/* >>> NEW Lichttemperatur */
+document.getElementById("sliderB").addEventListener("input", e => {
+  const now = Date.now();
+  if (now - lastTempSend >= 50) {
+    send32(3, Number(e.target.value));
+    lastTempSend = now;
+  }
+});
+document.getElementById("sliderB").addEventListener("change", e => {
+  send32(3, Number(e.target.value));
+});
+
+/************ Picker Setup ************/
+function setupPicker(element, max, callback){
+  let topSpace = document.createElement("div");
+  topSpace.className="item";
+  topSpace.style.opacity=0;
+  element.appendChild(topSpace);
+
+  for (let i=0; i<=max; i++){
+    let d=document.createElement("div");
+    d.className="item";
+    let s=document.createElement("span");
+    s.innerText = i.toString().padStart(2,"0");
+    d.appendChild(s);
+    element.appendChild(d);
+  }
+  element.appendChild(topSpace.cloneNode(true));
+  element.scrollTop = ITEM_HEIGHT;
+
+  element.addEventListener("scroll", ()=>{
+    clearTimeout(element._t);
+    element._t = setTimeout(()=>{
+      let idx = Math.round(element.scrollTop / ITEM_HEIGHT);
+      element.scrollTop = idx*ITEM_HEIGHT;
+      if (!suppressSend) callback(idx);
+    },120);
+  });
+}
+
+/* Timer 1 */
+let t1={h:0,m:0,s:0};
+setupPicker(document.getElementById("t1h"),23,v=>{
+  t1.h=v; send32(0,t1.h*3600+t1.m*60+t1.s);
+});
+setupPicker(document.getElementById("t1m"),59,v=>{
+  t1.m=v; send32(0,t1.h*3600+t1.m*60+t1.s);
+});
+setupPicker(document.getElementById("t1s"),59,v=>{
+  t1.s=v; send32(0,t1.h*3600+t1.m*60+t1.s);
+});
+
+/* Timer 2 */
+let t2={h:0,m:0,s:0};
+setupPicker(document.getElementById("t2h"),23,v=>{
+  t2.h=v; send32(1,t2.h*3600+t2.m*60+t2.s);
+});
+setupPicker(document.getElementById("t2m"),59,v=>{
+  t2.m=v; send32(1,t2.h*3600+t2.m*60+t2.s);
+});
+setupPicker(document.getElementById("t2s"),59,v=>{
+  t2.s=v; send32(1,t2.h*3600+t2.m*60+t2.s);
+});
+
+document.getElementById("connectBtn").addEventListener("click", connectBLE);
+</script>
+
+</body>
+</html>
