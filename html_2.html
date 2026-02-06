@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>M5Dial Final Config</title>
+
 <style>
  body {
    font-family: sans-serif;
@@ -32,62 +33,27 @@
  }
  
 /* Helligkeit Slider Style */
+
 #sliderA {
   -webkit-appearance: none;
-  height: 14px;
-  border-radius: 10px;
+  appearance: none;
+  height: 30px;
+  border-radius: 15px;
   background: linear-gradient(to right, #000, #555, #ddd, #fff);
   outline: none;
   margin-top: 10px;
 }
 
-/* Thumb Design */
-#sliderA::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 26px;
-  height: 26px;
-  background: white;
-  border-radius: 50%;
-  border: 2px solid #333;
-  cursor: pointer;
-}
-#sliderA::-moz-range-thumb {
-  width: 26px;
-  height: 26px;
-  background: white;
-  border-radius: 50%;
-  border: 2px solid #333;
-  cursor: pointer;
-}
-
-
 /* Lichttemperatur Slider (Neutralweiß → Warmweiß) */
 #sliderB {
   -webkit-appearance: none;
-  height: 14px;
-  border-radius: 10px;
-  background: linear-gradient(to right, #ffffff, #ffe4c7, #ffb76b);
+  height: 30px;
+  border-radius: 15px;
+  background: linear-gradient(to right,   #ffffff,
+  #fff1dc,
+  #ffd6a3/*#ffffff, #ffe4c7, #ffb76b*/);
   outline: none;
   margin-top: 10px;
-}
-
-/* Thumb Design */
-#sliderB::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 26px;
-  height: 26px;
-  background: white;
-  border-radius: 50%;
-  border: 2px solid #333;
-  cursor: pointer;
-}
-#sliderB::-moz-range-thumb {
-  width: 26px;
-  height: 26px;
-  background: white;
-  border-radius: 50%;
-  border: 2px solid #333;
-  cursor: pointer;
 }
 
 
@@ -189,15 +155,16 @@ input[type="range"]::-webkit-slider-thumb {
   height: 24px;
   border: 2px solid #ffb76b;   /* warmes Orange */
   box-shadow: 0 0 6px rgba(255, 183, 107, 0.4);
+  outline: 1px #000;
+  outline-offset: 0; 
 }
 
 input[type="range"]::-moz-range-thumb {
-  background: #ffffff;
+  background: transparent;
   border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  border: 2px solid #ffb76b;
-  box-shadow: 0 0 6px rgba(255, 183, 107, 0.4);
+  width: 16px;
+  height: 16px;
+  border: 7px solid #ffb76b;
 }
 
 
