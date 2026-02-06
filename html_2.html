@@ -148,12 +148,18 @@ h2 {
   color: #ffb76b;  /* warmorange */
 }
 
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 input[type="range"]::-webkit-slider-thumb {
-  background: transparent;
+  -webkit-appearance: none;
   border-radius: 50%;
   width: 16px;
   height: 16px;
   border: 7px solid #ffb76b;
+  box-sizing: content-box;*/ 
 }
 
 input[type="range"]::-moz-range-thumb {
