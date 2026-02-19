@@ -44,7 +44,7 @@ BLECharacteristic notifyChar(NOTIFY_UUID, BLENotify, 5);  // 5 bytes: id + 32-bi
 uint32_t brightness=0, lightColor=0, batteryLevel=0;
 uint32_t timerOn=0, timerDim=0;
 uint32_t* flash = (uint32_t*)FlashAddress;
-uint16_t pwm_seq[2] = {0,0};
+uint16_t pwm_seq[4] = {4000,12000,0,0};
 
 MedianFilter<int> ADCMedian(50);
 
@@ -149,6 +149,9 @@ void shutDown(bool batteryDisconnect = false)
     NRF_TWIM0->ENABLE = 0; 
     NRF_SPIM0->ENABLE = 0;
 
+    pinMode(P1_11, INPUT_PULLUP);
+    pinMode(P1_12, INPUT_PULLUP);
+
     BLE.end();
     NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Een;
     while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
@@ -175,22 +178,30 @@ void shutDown(bool batteryDisconnect = false)
 
 void setupPWM()
 {
-    NRF_PWM0->PSEL.OUT[0] = (WARM_PIN << PWM_PSEL_OUT_PIN_Pos) |
-                            (PWM_PSEL_OUT_CONNECT_Connected << PWM_PSEL_OUT_CONNECT_Pos);
-    NRF_PWM0->PSEL.OUT[1] = (WARMER_PIN << PWM_PSEL_OUT_PIN_Pos) |
-                            (PWM_PSEL_OUT_CONNECT_Connected << PWM_PSEL_OUT_CONNECT_Pos);
-    NRF_PWM0->ENABLE = (PWM_ENABLE_ENABLE_Enabled << PWM_ENABLE_ENABLE_Pos);
-    NRF_PWM0->MODE = (PWM_MODE_UPDOWN_Up << PWM_MODE_UPDOWN_Pos);
-    NRF_PWM0->PRESCALER = (PWM_PRESCALER_PRESCALER_DIV_1 << PWM_PRESCALER_PRESCALER_Pos);
-    NRF_PWM0->COUNTERTOP = (16000 << PWM_COUNTERTOP_COUNTERTOP_Pos); //1 msec
-    NRF_PWM0->LOOP = (PWM_LOOP_CNT_Disabled << PWM_LOOP_CNT_Pos);
-    NRF_PWM0->DECODER = (PWM_DECODER_LOAD_Individual << PWM_DECODER_LOAD_Pos) |
-                        (PWM_DECODER_MODE_RefreshCount << PWM_DECODER_MODE_Pos);
-    NRF_PWM0->SEQ[0].PTR = ((uint32_t)(&pwm_seq[0]) << PWM_SEQ_PTR_PTR_Pos);
-    //NRF_PWM0->SEQ[0].CNT = (2 << PWM_SEQ_CNT_CNT_Pos);  // zwei Kanäle
-    NRF_PWM0->SEQ[0].CNT = ((sizeof(pwm_seq) / sizeof(uint16_t)) << PWM_SEQ_CNT_CNT_Pos);
-    NRF_PWM0->SEQ[0].REFRESH = 1;
+    NRF_PWM0->PSEL.OUT[0] = P1_11;
+    NRF_PWM0->PSEL.OUT[1] = P1_12;         
+    NRF_PWM0->PSEL.OUT[2] = 0xFFFFFFFF;   // OUT2 nicht genutzt
+    NRF_PWM0->PSEL.OUT[3] = 0xFFFFFFFF;   // OUT3 nicht genutzt
+
+
+    NRF_PWM0->ENABLE      = 1;
+    NRF_PWM0->MODE        = PWM_MODE_UPDOWN_Up;                     // Edge-aligned
+    NRF_PWM0->PRESCALER   = PWM_PRESCALER_PRESCALER_DIV_1;          // 16 MHz
+    NRF_PWM0->COUNTERTOP  = 16000;                                // 1 kHz
+    
+    NRF_PWM0->DECODER =
+        (PWM_DECODER_LOAD_Individual << PWM_DECODER_LOAD_Pos) |
+        (PWM_DECODER_MODE_RefreshCount << PWM_DECODER_MODE_Pos);
+
+    NRF_PWM0->SEQ[0].PTR      = (uint32_t)pwm_seq;
+    NRF_PWM0->SEQ[0].CNT      = 4;       // Pflicht: 4 Werte für OUT0..OUT3
+    NRF_PWM0->SEQ[0].REFRESH  = 0;       // jede Periode Werte neu lesen
     NRF_PWM0->SEQ[0].ENDDELAY = 0;
+
+    
+    NRF_PWM0->LOOP   = 0xFFFF;                      // maximale Wiederholzahl
+    NRF_PWM0->SHORTS = PWM_SHORTS_LOOPSDONE_SEQSTART0_Msk;
+
     NRF_PWM0->TASKS_SEQSTART[0] = 1;
 }
 
@@ -298,12 +309,10 @@ void setup()
     lightColor = flash[3];
     brightness = 50;
 
-    //setupPWM();
+    setupPWM();
     setupEncoder();
     setupBLE();
     setupBatMan();
-    pinMode(P1_11, OUTPUT);
-    pinMode(P1_12, OUTPUT);
 
     attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), wakeup, FALLING);
 }
@@ -319,9 +328,7 @@ void loop()
 
     pwm_seq[0] = brightness * 63;
     pwm_seq[1] = lightColor * 63;
-    analogWrite(P1_11, brightness);
-    analogWrite(P1_12, lightColor);
-    //NRF_PWM0->TASKS_SEQSTART[0] = 1;
+    NRF_PWM0->TASKS_SEQSTART[0] = 1;
 
     if(central&&firstConnect)
         firstConnect = false;
