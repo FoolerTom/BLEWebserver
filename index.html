@@ -76,6 +76,14 @@
   justify-content: center;
   opacity: 0.8;
 }
+ /* Ladesymbol */
+#batteryIcon.charging::before {
+  content: "⚡";
+  position: absolute;
+  left: -18px;
+  font-size: 14px;
+  color: #4cd964;
+}
 
 #batteryIcon::after {
   content: "";
@@ -310,16 +318,31 @@ function onNotify(event) {
 
  
     // Akkustand (ID 4)
-    if (id === 4) {
-    const pct = Math.min(100, Math.max(0, val));
-    document.getElementById("batteryIcon").innerText = pct + "%";
+   // Akkustand (ID 4)
+if (id === 4) {
 
-    // Farbe abhängig vom Ladezustand
-    const icon = document.getElementById("batteryIcon");
-    if (pct < 20) icon.style.borderColor = icon.style.color = "#ff4444";
-    else if (pct < 50) icon.style.borderColor = icon.style.color = "#ffbb33";
-    else icon.style.borderColor = icon.style.color = "white";
-    }
+  // Bit 31 prüfen (Ladeflag)
+  const isCharging = (val & 0x80000000) !== 0;
+
+  // Untere 31 Bit = Prozentwert
+  const pctRaw = val & 0x7FFFFFFF;
+  const pct = Math.min(100, Math.max(0, pctRaw));
+
+  const icon = document.getElementById("batteryIcon");
+  icon.innerText = pct + "%";
+
+  // Ladeanzeige setzen/entfernen
+  if (isCharging) {
+    icon.classList.add("charging");
+  } else {
+    icon.classList.remove("charging");
+  }
+
+  // Farbe abhängig vom Akkustand
+  if (pct < 20) icon.style.borderColor = icon.style.color = "#ff4444";
+  else if (pct < 50) icon.style.borderColor = icon.style.color = "#ffbb33";
+  else icon.style.borderColor = icon.style.color = "white";
+}
 
 
   // Timer 1
