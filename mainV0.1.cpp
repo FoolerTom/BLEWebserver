@@ -27,10 +27,7 @@
 #define OUTP            3
 #define EN_INTERRUPT    (3<<16)
 
-//#define FlashAddress   0x000F0000
 const uint32_t FLASH_DATA_ADDR = 0x001000;
-
-//uint32_t* flash = (uint32_t*)FlashAddress;
 
 const uint32_t SampleNumber = 20;
 
@@ -79,9 +76,10 @@ BLECharacteristic notifyChar(NOTIFY_UUID);
 
 MedianFilter<uint32_t> ADCMedian(SampleNumber);
 
-uint32_t brightness=0, lightColor=0, batteryLevel=0;
-uint32_t timerOn=0, timerDim=0;
-uint16_t pwm_seq[4] = {4000,12000,0,0};
+int32_t brightness=0, lightColor=0, batteryLevel=0;
+int32_t timerOn=0, timerDim=0;
+uint32_t startUpTime = 0;
+uint16_t pwm_seq[4] = {0xFFFF,0xFFFF,0,0};
 int16_t saadc_buffer=0;
 
 //---------------------------------------------------------------------------------------------------------------
@@ -154,7 +152,7 @@ void QflashSleep (bool turnOff = true)
 
 void saveToFlash() 
 {
-  uint32_t vars[4] = {timerOn, timerDim, brightness, lightColor};
+  int32_t vars[4] = {timerOn, timerDim, brightness, lightColor};
   uint8_t data[16];
   memcpy(data, vars, sizeof(vars));
 
@@ -169,7 +167,7 @@ void saveToFlash()
 void loadFromFlash() 
 {
   uint8_t data[16];
-  uint32_t vars[4];
+  int32_t vars[4];
 
   QflashSleep(false);
 
@@ -177,12 +175,29 @@ void loadFromFlash()
 
   memcpy(vars, data, sizeof(vars));
 
-  timerOn = vars[0];
-  timerDim = vars[1];
-  brightness = vars[2];
-  lightColor = vars[3];
+  timerOn = constrain(vars[0], 0, 86399);
+  timerDim = constrain(vars[1], 0, 86399);
+  brightness = constrain(vars[2], 1, 100);
+  lightColor = constrain(vars[3], 0, 100);
 
   QflashSleep();
+}
+
+void shutDown(bool batteryDisconnect = false)
+{  
+  saveToFlash();
+
+  NRF_P0->PIN_CNF[ENC_A_PIN] = DISCON;
+  NRF_P0->PIN_CNF[ENC_B_PIN] = DISCON;
+  NRF_P0->PIN_CNF[VBAT_PIN] = DISCON;
+  NRF_P0->PIN_CNF[CHARGE_INDI_PIN] = DISCON;
+  NRF_P0->PIN_CNF[BAT_EN_PIN] = DISCON;
+
+  NRF_P0->PIN_CNF[BUTTON_PIN] |= EN_INTERRUPT;
+
+  if(batteryDisconnect)
+    NRF_P1->PIN_CNF[BAT_DISCON_PIN] = IN_DOWN;
+  NRF_POWER->SYSTEMOFF = 1;
 }
 
 void setupPWM()
@@ -211,6 +226,9 @@ void setupPWM()
     NRF_PWM0->LOOP   = 0xFFFF;                      // maximale Wiederholzahl
     NRF_PWM0->SHORTS = PWM_SHORTS_LOOPSDONE_SEQSTART0_Msk;
 
+    pwm_seq[0] = 0xFFFF - (uint32_t)0xFFFF * brightness * lightColor / 10000;
+    pwm_seq[1] = 0xFFFF - (uint32_t)0xFFFF * brightness * (100 - lightColor) / 10000;
+    startUpTime = millis();
     NRF_PWM0->TASKS_SEQSTART[0] = 1;
 }
 
@@ -225,9 +243,30 @@ uint8_t response[5] =
       (uint8_t)(val >> 16),
       (uint8_t)(val >> 24)
     };
-
     notifyChar.notify(response, 5);
 
+}
+
+void readBat()
+{
+  static uint8_t shutDownCounter = 0;
+  int32_t BatBuffer = ADCMedian.GetFiltered();
+  int32_t BatPcnt = map(BatBuffer, 1800L, 2360L, 0L, 100L);
+  if (BatPcnt < 0)
+  {
+    BatPcnt = 0;
+    shutDownCounter++;
+    if(shutDownCounter>=3)
+      shutDown(completely);
+  }
+  else
+    shutDownCounter = 0;
+  if (BatPcnt > 100) BatPcnt = 100;
+  if(!(NRF_P0->IN & (1<<CHARGE_INDI_PIN)))
+      BatPcnt |= 1<<31;
+  batteryLevel = BatPcnt;
+  sendNotify(4, batteryLevel);    
+  WEBLOG("\nADC raw: %u %u", batteryLevel, BatBuffer);
 }
 
 void write32_callback(uint16_t conn_handle, BLECharacteristic* chr, uint8_t* data, uint16_t len)
@@ -235,24 +274,40 @@ void write32_callback(uint16_t conn_handle, BLECharacteristic* chr, uint8_t* dat
     if (len != 5) return;
 
     uint8_t id = data[0];
-    uint32_t val = data[1] | (data[2]<<8) | (data[3]<<16) | (data[4]<<24);
+    int32_t val = data[1] | (data[2]<<8) | (data[3]<<16) | (data[4]<<24);
 
     //WEBLOG("RX id=%u val=%lu\n", (unsigned)id, (unsigned long)val);
 
     switch (id)
     {
-      case 0: timerOn     = val; break;
-      case 1: timerDim    = val; break;
-      case 2: brightness  = val; break;
-      case 3: lightColor  = val; break;
-      case 4: batteryLevel= val; break;
+      case 0:
+        if(timerDim+val>=60)
+            timerOn = val;
+        else
+            val = timerOn = 60-timerDim;
+        startUpTime = millis(); 
+        break;
+      case 1: 
+        if(timerOn+val>=60)
+            timerDim = val;
+        else
+            val = timerDim = 60-timerOn;
+        startUpTime = millis();
+        break;
+      case 2: brightness = val = constrain(val, 1, 100); break;
+      case 3: lightColor = val = constrain(val, 0, 100); break;
+      //case 4: batteryLevel = val; break;
 
       case 99:
         sendNotify(0, timerOn);
+        delay(50);
         sendNotify(1, timerDim);
+        delay(50);
         sendNotify(2, brightness);
+        delay(50);
         sendNotify(3, lightColor);
-        sendNotify(4, batteryLevel);
+        delay(50);
+        readBat();
         return;
     }
 
@@ -351,45 +406,6 @@ void setupTimerPpi()
     NVIC_EnableIRQ(SAADC_IRQn);
 }
 
-void shutDown(bool batteryDisconnect = false)
-{  
-  saveToFlash();
-
-  NRF_P0->PIN_CNF[ENC_A_PIN] = DISCON;
-  NRF_P0->PIN_CNF[ENC_B_PIN] = DISCON;
-  NRF_P0->PIN_CNF[VBAT_PIN] = DISCON;
-  NRF_P0->PIN_CNF[CHARGE_INDI_PIN] = DISCON;
-  NRF_P0->PIN_CNF[BAT_EN_PIN] = DISCON;
-
-  NRF_P0->PIN_CNF[BUTTON_PIN] |= EN_INTERRUPT;
-
-  if(batteryDisconnect)
-    NRF_P1->PIN_CNF[BAT_DISCON_PIN] = IN_DOWN;
-  NRF_POWER->SYSTEMOFF = 1;
-}
-
-void readBat()
-{
-  static uint8_t shutDownCounter = 0;
-  int32_t BatBuffer = ADCMedian.GetFiltered();
-  int32_t BatPcnt = map(BatBuffer, 1800L, 2360L, 0L, 100L);
-  if (BatPcnt < 0)
-  {
-    BatPcnt = 0;
-    shutDownCounter++;
-    if(shutDownCounter>=3)
-      shutDown(completely);
-  }
-  else
-    shutDownCounter = 0;
-  if (BatPcnt > 100) BatPcnt = 100;
-  if(!(NRF_P0->IN & (1<<CHARGE_INDI_PIN)))
-      BatPcnt |= 1<<31;
-  batteryLevel = BatPcnt;
-  sendNotify(4, batteryLevel);    
-  WEBLOG("ADC raw: %u \t %u\n", batteryLevel, BatBuffer);
-}
-
 void setupEncoder()
 {
   NRF_P0->PIN_CNF[ENC_A_PIN] = IN_UP;
@@ -415,62 +431,93 @@ void setupEncoder()
 
 void setup() 
 {
-  loadFromFlash();
-  brightness = 50;
-
-  setupPWM();
-  setupBatMan();
-  setupEncoder();
-  setupBLE();
-  setupTimerPpi();
+    loadFromFlash();
+    setupPWM();
+    setupBatMan();
+    setupEncoder();
+    setupBLE();
+    setupTimerPpi();
 }
 
 void loop() 
 {
-  static bool fallingEdge = true, noShutDown = false;
-  static uint32_t fallTime = 0, noShutDownTime = 0, batReadTime = 0;
-  bool ButtonPressed = !(NRF_P0->IN&(1<<BUTTON_PIN));
-  uint32_t ms = millis();
-
-   if(ms-batReadTime>5000)
+    uint32_t ms = millis();
+    static bool fallingEdge = true, noShutDown = false;
+    static uint32_t fallTime = 0, noShutDownTime = 0, batReadTime = 0, loopTime = 0;
+    bool ButtonPressed = !(NRF_P0->IN&(1<<BUTTON_PIN));
+    
+    if(ms-loopTime>100)
     {
-        readBat();
-        batReadTime = ms;
+        if(ButtonPressed&&fallingEdge)
+        {
+            fallTime = ms;
+            fallingEdge = false;
+            if(ms-noShutDownTime>500)
+                noShutDown = false;
+        }
+        if(!fallingEdge&&!ButtonPressed)
+        {
+            if(ms-fallTime>100)
+            {
+                if(noShutDown)
+                    fallingEdge = true;
+                else
+                    shutDown();
+        }
+        }
+        if(NRF_QDEC->EVENTS_REPORTRDY)
+        {
+            if(abs(NRF_QDEC->ACC)>=2)
+            {
+                NRF_QDEC->TASKS_READCLRACC = 1;
+                if(ButtonPressed)
+                {
+                    lightColor += NRF_QDEC->ACCREAD/2 /*+ NRF_QDEC->ACCDBLREAD*/;
+                    lightColor = constrain(lightColor, 0, 100);
+                    sendNotify(3, lightColor);
+                    noShutDown = true;
+                    noShutDownTime = ms;
+                }
+                else
+                {
+                    brightness += NRF_QDEC->ACCREAD/2 /*+ NRF_QDEC->ACCDBLREAD*/;
+                    brightness = constrain(brightness, 1, 100);
+                    sendNotify(2, brightness);
+                }
+            }
+            NRF_QDEC->EVENTS_REPORTRDY = 0; // Clear event flag
+        }
+        if(ms-batReadTime>5000)
+        {
+            readBat();
+            batReadTime = ms;
+            WEBLOG("\nPWM: %u \t %u", pwm_seq[0], pwm_seq[1]);
+            WEBLOG("\nStart Up: %u %u", startUpTime, millis());
+        }
+        if(ms-startUpTime<2000) //soft start for 2 seconds
+        {
+            uint32_t dimFactor = (uint32_t)1000 * (ms - startUpTime) / 2000;
+            pwm_seq[0] = 0xFFFF - (uint64_t)0xFFFF * brightness * lightColor * dimFactor / 10000000;
+            pwm_seq[1] = 0xFFFF - (uint64_t)0xFFFF * brightness * (100 - lightColor) * dimFactor / 10000000;
+            NRF_PWM0->TASKS_SEQSTART[0] = 1;
+        }
+        else if((ms-startUpTime) < ((uint32_t)timerOn*1000)) //preset brightness for timerOn seconds
+        {
+            pwm_seq[0] = 0xFFFF - (uint32_t)0xFFFF * brightness * lightColor / 10000;
+            pwm_seq[1] = 0xFFFF - (uint32_t)0xFFFF * brightness * (100 - lightColor) / 10000;
+            NRF_PWM0->TASKS_SEQSTART[0] = 1;
+        }
+        else if((ms-startUpTime) < ((uint32_t)(timerOn+timerDim)*1000)) //dimming down for timerDim seconds
+        {
+            uint32_t dimFactor = 1000 - (uint32_t)1000 * (ms - startUpTime - timerOn*1000) / (timerDim*1000);
+            pwm_seq[0] = 0xFFFF - (uint64_t)0xFFFF * brightness * lightColor * dimFactor / 10000000;
+            pwm_seq[1] = 0xFFFF - (uint64_t)0xFFFF * brightness * (100 - lightColor) * dimFactor / 10000000;
+            NRF_PWM0->TASKS_SEQSTART[0] = 1;
+        }
+        else
+        {
+            shutDown();
+        }
+        loopTime = ms;
     }
-  // check connection
-  if(ButtonPressed&&fallingEdge)
-  {
-      fallTime = millis();
-      fallingEdge = false;
-      if(ms-noShutDownTime>500)
-          noShutDown = false;
-  }
-  if(!fallingEdge&&!ButtonPressed)
-  {
-      if(ms-fallTime>100)
-      {
-          if(noShutDown)
-              fallingEdge = true;
-          else
-              shutDown();
-      }
-  }
-  if(NRF_QDEC->EVENTS_REPORTRDY)
-  {
-      NRF_QDEC->TASKS_READCLRACC = 1;
-      if(ButtonPressed)
-      {
-          lightColor += NRF_QDEC->ACCREAD + NRF_QDEC->ACCDBLREAD;
-          sendNotify(3, lightColor);
-          noShutDown = true;
-          noShutDownTime = millis();
-          Serial.println(lightColor);
-      }
-      else
-      {
-          brightness += NRF_QDEC->ACCREAD + NRF_QDEC->ACCDBLREAD;
-          sendNotify(2, brightness);
-      }
-      NRF_QDEC->EVENTS_REPORTRDY = 0; // Clear event flag
-  }
 }
