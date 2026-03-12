@@ -196,19 +196,45 @@ void loadFromFlash()
 
 void shutDown(bool batteryDisconnect = false)
 {  
-  saveToFlash();
+    saveToFlash();
 
-  NRF_P0->PIN_CNF[ENC_A_PIN] = DISCON;
-  NRF_P0->PIN_CNF[ENC_B_PIN] = DISCON;
-  NRF_P0->PIN_CNF[VBAT_PIN] = DISCON;
-  NRF_P0->PIN_CNF[CHARGE_INDI_PIN] = DISCON;
-  NRF_P0->PIN_CNF[BAT_EN_PIN] = DISCON;
+    NRF_P0->PIN_CNF[ENC_A_PIN] = DISCON;
+    NRF_P0->PIN_CNF[ENC_B_PIN] = DISCON;
+    NRF_P0->PIN_CNF[VBAT_PIN] = DISCON;
+    NRF_P0->PIN_CNF[CHARGE_INDI_PIN] = DISCON;
+    NRF_P0->PIN_CNF[BAT_EN_PIN] = DISCON;
+    /*NRF_P1->PIN_CNF[WARM_PIN] = IN_DOWN | DISCON;
+    NRF_P1->PIN_CNF[WARMER_PIN] = IN_DOWN | DISCON;*/
 
-  NRF_P0->PIN_CNF[BUTTON_PIN] |= EN_INTERRUPT;
+    NRF_P0->PIN_CNF[BUTTON_PIN] |= EN_INTERRUPT;
 
-  if(batteryDisconnect)
-    NRF_P1->PIN_CNF[BAT_DISCON_PIN] = IN_DOWN;
-  NRF_POWER->SYSTEMOFF = 1;
+    if(pwm_seq[0]%2)
+        pwm_seq[0]--;
+    if(pwm_seq[1]%2)
+        pwm_seq[1]--;
+    while(pwm_seq[0]>pwm_seq[1])
+    {
+        pwm_seq[1]+=2;
+        NRF_PWM0->TASKS_SEQSTART[0] = 1;
+        delayMicroseconds(50);
+    }
+    while(pwm_seq[0]<pwm_seq[1])
+    {
+        pwm_seq[0]+=2;
+        NRF_PWM0->TASKS_SEQSTART[0] = 1;
+        delayMicroseconds(50);
+    }
+    while(pwm_seq[0]<PWMperiod)
+    {
+        pwm_seq[0]++;
+        pwm_seq[1]++;
+        NRF_PWM0->TASKS_SEQSTART[0] = 1;
+        delayMicroseconds(50);
+    }
+
+    if(batteryDisconnect)
+        NRF_P1->PIN_CNF[BAT_DISCON_PIN] = IN_DOWN;
+    NRF_POWER->SYSTEMOFF = 1;
 }
 
 void setupPWM()
@@ -236,6 +262,8 @@ void setupPWM()
     
     NRF_PWM0->LOOP   = 0xFFFF;                      // maximale Wiederholzahl
     NRF_PWM0->SHORTS = PWM_SHORTS_LOOPSDONE_SEQSTART0_Msk;
+
+    NRF_PWM0->TASKS_SEQSTART[0] = 1;
 
     startUpTime = millis();
 
@@ -508,9 +536,9 @@ void loop()
             WEBLOG("\nPWM: %u \t %u", pwm_seq[0], pwm_seq[1]);
             WEBLOG("\nStart Up: %u %u", startUpTime, millis());
         }
-        if(ms-startUpTime<2000) //soft start for 2 seconds
+        if(ms-startUpTime<1000) //soft start for 1 second
         {
-            uint32_t dimFactor = (uint32_t)1000 * (ms - startUpTime) / 2000;
+            uint32_t dimFactor = (uint32_t)1000 * (ms - startUpTime) / 1000;
             pwm_seq[0] = PWMperiod - (uint32_t)(PWMperiod/100) * brightness * lightColor * dimFactor / 100000;
             pwm_seq[1] = PWMperiod - (uint32_t)(PWMperiod/100) * brightness * (100 - lightColor) * dimFactor / 100000;
             NRF_PWM0->TASKS_SEQSTART[0] = 1;
