@@ -400,7 +400,7 @@ void setupBLE()
   Bluefruit.Advertising.addTxPower();
   
   Bluefruit.Advertising.addService(serviceMain);
-  Bluefruit.Advertising.addName();
+  Bluefruit.ScanResponse.addName();
   
   Bluefruit.Advertising.restartOnDisconnect(true);
   Bluefruit.Advertising.setFastTimeout(30);
