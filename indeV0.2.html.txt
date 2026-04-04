@@ -167,7 +167,7 @@ input[type="range"]::-webkit-slider-thumb {
   width: 16px;
   height: 16px;
   border: 7px solid #ffb76b;
-  box-sizing: content-box;*/ 
+  box-sizing: content-box;
 }
 
 input[type="range"]::-moz-range-thumb {
