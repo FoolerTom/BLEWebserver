@@ -307,8 +307,9 @@ function onNotify(event) {
 
   // Helligkeit
   if (id === 2) {
-    document.getElementById("valueA").innerText = val;
-    document.getElementById("sliderA").value = val;
+    document.getElementById("valueA").innerText = val&0x0FFFFFFF;
+    document.getElementById("sliderA").value = val&0x0FFFFFFF;
+    document.getElementById("startupBrightnessBit").value = (val>>31)&1;
   }
 
   // Lichttemperatur
