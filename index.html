@@ -194,7 +194,7 @@ input[type="range"]::-moz-range-thumb {
   <!-- SLIDER A -->
   <h2>Helligkeit: <span id="valueA">–</span></h2>
   <input type="range" min="0" max="100" id="sliderA" style="width:100%;">
-  <label style="margin-top: 10px; display: block;"><input type="checkbox" id="startupBrightnessBit"> Beim Einschalten immer auf diese Helligkeit setzen</label>
+  <label style="margin-top: 10px; accent-color: #ffb76b; display: block;"><input type="checkbox" id="startupBrightnessBit"> Als Standardhelligkeit setzen</label>
 
   <!-- >>> NEW SLIDER B (Lichttemperatur) -->
   <h2>Lichttemperatur: <span id="valueB">–</span></h2>
@@ -309,7 +309,7 @@ function onNotify(event) {
   if (id === 2) {
     document.getElementById("valueA").innerText = val&0x0FFFFFFF;
     document.getElementById("sliderA").value = val&0x0FFFFFFF;
-    document.getElementById("startupBrightnessBit").value = (val>>31)&1;
+    startupBrightnessBit.checked = (val >> 31) & 1;
   }
 
   // Lichttemperatur
