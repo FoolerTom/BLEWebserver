@@ -61,14 +61,16 @@
  
 
 #batteryIcon {
+  --battery-color: #ffb76b; /* Standardfarbe */
+
   position: absolute;
   top: 10px;
   right: 10px;
   width: 42px;
   height: 20px;
-  border: 2px solid #ffb76b;
+  border: 2px solid var(--battery-color);
   border-radius: 4px;
-  color: #ffb76b;
+  color: var(--battery-color);
   font-size: 11px;
   font-weight: 700;
   display: flex;
@@ -76,7 +78,8 @@
   justify-content: center;
   opacity: 0.8;
 }
- /* Ladesymbol */
+
+/* Ladesymbol */
 #batteryIcon.charging::before {
   content: "⚡";
   position: absolute;
@@ -92,7 +95,7 @@
   top: 5px;
   width: 4px;
   height: 10px;
-  background: #ffb76b;
+  background: var(--battery-color);
   border-radius: 2px;
 }
 
@@ -309,7 +312,7 @@ function onNotify(event) {
   if (id === 2) {
     document.getElementById("valueA").innerText = val&0x0FFFFFFF;
     document.getElementById("sliderA").value = val&0x0FFFFFFF;
-    startupBrightnessBit.checked = (val >> 31) & 1;
+    document.getElementById("startupBrightnessBit").value = (val>>31)&1;
   }
 
   // Lichttemperatur
@@ -341,9 +344,13 @@ if (id === 4) {
   }
 
   // Farbe abhängig vom Akkustand
-  if (pct < 20) icon.style.borderColor = icon.style.color = "#ff4444";
-  else if (pct < 50) icon.style.borderColor = icon.style.color = "#ffbb33";
-  else icon.style.borderColor = icon.style.color = "white";
+  if (pct < 20) {
+  icon.style.setProperty("--battery-color", "#ff4444");
+	} else if (pct < 50) {
+  icon.style.setProperty("--battery-color", "#ffbb33");
+	} else {
+  icon.style.setProperty("--battery-color", "white");
+	}
 }
 
 
