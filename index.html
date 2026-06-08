@@ -290,11 +290,11 @@ function stopKeepAlive() { if (keepAlive) clearInterval(keepAlive); }
 
 function pad2(n){ return n.toString().padStart(2,"0"); }
 function formatHMS(total){
-  total = Math.max(0, Math.floor(Number(total)));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
+	total = Math.max(0, Math.floor(Number(total)));
+	const h = Math.floor(total / 3600);
+	const m = Math.floor((total % 3600) / 60);
+	const s = total % 60;
+	return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
 }
 
 function showSettingsUI(show) {
@@ -321,10 +321,8 @@ function onNotify(event) {
     document.getElementById("sliderB").value = val;
   }
 
- 
-    // Akkustand (ID 4)
-   // Akkustand (ID 4)
-if (id === 4) {
+  // Akkustand (ID 4)
+  if (id === 4) {
 
   // Bit 31 prüfen (Ladeflag)
   const isCharging = (val & 0x80000000) !== 0;
@@ -403,27 +401,6 @@ async function setupGattAndUI(gattServer) {
 
   await notifyChar.startNotifications();
   notifyChar.addEventListener("characteristicvaluechanged", onNotify);
-
-
- 
-/*-------------------------------------------------------------------------------------------*/
-  // --- LOG: separater Notify-Characteristic ---
-  try {
-    logChar = await service.getCharacteristic(LOG_UUID);
-    await logChar.startNotifications();
-    logChar.addEventListener("characteristicvaluechanged", (event) => {
-      const v = event.target.value;
-      // UTF-8 dekodieren
-      const bytes = new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
-      const text = new TextDecoder("utf-8").decode(bytes);
-      logAppend(text);
-    });
-  } catch (e) {
-    console.warn("LOG characteristic not found (ok if disabled):", e);
-  }
-/*-------------------------------------------------------------------------------------------*/
-
-
  
   device.addEventListener("gattserverdisconnected", onDisconnected);
 
@@ -451,20 +428,6 @@ async function connectBLE() {
     stopKeepAlive();
   }
 }
-
-
-/*--------------------------------------------------------------------------------------------*/
-function logAppend(text) {
-  const view = document.getElementById("logView");
-  view.textContent += text;            // text kann \n enthalten
-  const auto = document.getElementById("logAutoscroll").checked;
-  if (auto) view.scrollTop = view.scrollHeight;
-}
-
-document.getElementById("logClearBtn").addEventListener("click", () => {
-  document.getElementById("logView").textContent = "";
-});
-/*--------------------------------------------------------------------------------------------*/
 
 /************ Sliders ************/
 /* Helligkeit */
