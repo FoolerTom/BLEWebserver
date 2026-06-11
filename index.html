@@ -225,21 +225,6 @@ input[type="range"]::-moz-range-thumb {
     <div class="readout" id="t2Readout">--:--:--</div>
   </div>
 
-<!-- ------------------------------------------------------------------------------ -->
-<h2>Log</h2>
-<div style="text-align:left">
-  <button id="logClearBtn">Clear</button>
-  <label style="margin-left:8px">
-    <input type="checkbox" id="logAutoscroll" checked> Auto-Scroll
-  </label>
-</div>
-<pre id="logView" style="
-  background:#111; color:#ddd; border:1px solid #333;
-  padding:10px; height:180px; overflow:auto; text-align:left;
-  border-radius:8px; white-space:pre-wrap; word-break:break-word;
-"></pre>
-<!-- ------------------------------------------------------------------------------ -->
-
 </div>
 
 <script>
@@ -247,10 +232,6 @@ input[type="range"]::-moz-range-thumb {
 const SERVICE_UUID    = "12345678-1234-5678-1234-56789abcdef0";
 const WRITE32_UUID    = "11111111-1234-5678-1234-56789abcdef0";
 const NOTIFY_UUID     = "22222222-1234-5678-1234-56789abcdef0";
- 
-/*-----------------------------------------------------------------------------------*/
- const LOG_UUID = "33333333-1234-5678-1234-56789abcdef0";
-/*-----------------------------------------------------------------------------------*/
 
 /* IDs:
  0 = Timer 1
@@ -271,10 +252,6 @@ let lastBrightnessSend = 0;
 let lastTempSend = 0;
 let suppressSend = false;
 let keepAlive = null;
-
-/*-----------------------------------------------------------------------------------------*/
- let logChar = null;
-/*-----------------------------------------------------------------------------------------*/
 
 /************ Picker helper ************/
 function setPickerValue(element, value) {
